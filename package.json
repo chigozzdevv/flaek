@@ -1,0 +1,48 @@
+{
+  "name": "flaek-server",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only -r tsconfig-paths/register src/server.ts",
+    "build": "tsc -p tsconfig.json && tsc-alias -p tsconfig.json",
+    "start": "node dist/server.js",
+    "retention:once": "ts-node-dev -r tsconfig-paths/register src/features/ingest/retention.cli.ts",
+    "worker": "ts-node-dev -r tsconfig-paths/register src/features/jobs/worker.cli.ts",
+    "arcium:mxe": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/print-mxe.ts",
+    "arcium:derive": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/derive-accounts.ts",
+    "arcium:idl": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/fetch-idl.ts",
+    "start:worker": "node dist/features/jobs/worker.cli.js",
+    "docker:arcium:mxe": "docker compose run --rm --no-deps server node dist/features/arcium/cli/print-mxe.js",
+    "docker:arcium:derive": "docker compose run --rm --no-deps server node dist/features/arcium/cli/derive-accounts.js",
+    "docker:arcium:idl": "docker compose run --rm --no-deps server node dist/features/arcium/cli/fetch-idl.js"
+  },
+  "dependencies": {
+    "@arcium-hq/client": "^0.3.0",
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "^1.98.4",
+    "ajv": "^8.17.1",
+    "axios": "^1.12.2",
+    "bcryptjs": "^3.0.2",
+    "bullmq": "^5.61.0",
+    "cloudinary": "^2.7.0",
+    "csv-parse": "^6.1.0",
+    "dotenv": "^17.2.3",
+    "express": "^5.1.0",
+    "ioredis": "^5.8.1",
+    "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.19.1",
+    "otplib": "^12.0.1",
+    "pino": "^10.0.0",
+    "pino-http": "^11.0.0",
+    "zod": "^4.1.12"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
+    "@types/node": "^24.7.0",
+    "ts-node-dev": "^2.0.0",
+    "tsc-alias": "^1.8.16",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.9.3"
+  }
+}

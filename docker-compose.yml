@@ -1,0 +1,73 @@
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    profiles: ["app"]
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    profiles: ["app"]
+
+  solana:
+    image: solanalabs/solana:v1.18.18
+    command: solana-test-validator -r
+    ports:
+      - "8899:8899"
+      - "8900:8900"
+    restart: unless-stopped
+    profiles: ["solana"]
+
+  server:
+    build: .
+    depends_on:
+      - mongo
+      - redis
+    env_file:
+      - .env
+    environment: {}
+    ports:
+      - "4000:4000"
+    command: ["node", "dist/server.js"]
+    restart: unless-stopped
+    profiles: ["app"]
+
+  worker:
+    build: .
+    depends_on:
+      - mongo
+      - redis
+    env_file:
+      - .env
+    environment: {}
+    command: ["node", "dist/features/jobs/worker.cli.js"]
+    restart: unless-stopped
+    profiles: ["app"]
+
+  # CLI services for Arcium details (run with: docker compose run --rm mxe <PROGRAM_ID>)
+  mxe:
+    build: .
+    env_file: [.env]
+    command: ["node", "dist/features/arcium/cli/print-mxe.js"]
+    profiles: ["arcium"]
+
+  idl:
+    build: .
+    env_file: [.env]
+    command: ["node", "dist/features/arcium/cli/fetch-idl.js"]
+    profiles: ["arcium"]
+
+  derive:
+    build: .
+    env_file: [.env]
+    command: ["node", "dist/features/arcium/cli/derive-accounts.js"]
+    profiles: ["arcium"]
+
+volumes:
+  mongo_data:
