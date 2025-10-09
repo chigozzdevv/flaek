@@ -1,9 +1,0 @@
-[workspace]
-members = [ "programs/arcium-hello" ]
-
-[provider]
-cluster = "localnet"
-wallet = "arcium-keypair.json"
-
-[programs.localnet]
-arcium_hello = "ArciUM1111111111111111111111111111111111111"
