@@ -1,0 +1,22 @@
+[toolchain]
+package_manager = "yarn"
+
+[features]
+resolution = true
+skip-lint = false
+
+[programs.localnet]
+flaek_mxe = "Hc6oVrp36jfCeSfaozozJyHk6PG9eWoFrj9PieJnCD2R"
+
+[programs.devnet]
+flaek_mxe = "Hc6oVrp36jfCeSfaozozJyHk6PG9eWoFrj9PieJnCD2R"
+
+[registry]
+url = "https://api.apr.dev"
+
+[provider]
+cluster = "devnet"
+wallet = "~/.config/solana/id.json"
+
+[scripts]
+test = "yarn run ts-mocha -p ./tsconfig.json -t 1000000 \"tests/**/*.ts\""
