@@ -1,7 +1,48 @@
 import { operationRepository } from '@/features/operations/operation.repository';
 import { httpError } from '@/shared/errors';
+import { PublicKey } from '@solana/web3.js';
+import { getCompDefAccOffset, getCompDefAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getStakingPoolAccAddress, getClockAccAddress } from '@arcium-hq/client';
+import { sha256Hex } from '@/utils/hash';
 
 async function create(tenantId: string, body: any) {
+  const computed = sha256Hex(JSON.stringify(body.pipeline_spec) + body.artifact_uri);
+  if (computed !== body.pipeline_hash) {
+    throw httpError(400, 'invalid_body', 'pipeline_hash_mismatch');
+  }
+
+  let accounts = body.accounts || {};
+  let compDefOffset: number | undefined = body.pipeline_spec?.comp_def_offset;
+  if (!compDefOffset && body.pipeline_spec?.circuit_name) {
+    try {
+      const off = getCompDefAccOffset(body.pipeline_spec.circuit_name);
+      compDefOffset = Buffer.from(off).readUInt32LE(0);
+    } catch {}
+  }
+  if (body.runtime === 'arcium' && body.mxeProgramId) {
+    try {
+      const mxePk = new PublicKey(body.mxeProgramId);
+      const mem = getMempoolAccAddress(mxePk);
+      const exec = getExecutingPoolAccAddress(mxePk);
+      accounts = {
+        ...accounts,
+        mxe: mxePk.toBase58(),
+        mempool: mem.toBase58(),
+        executingPool: exec.toBase58(),
+      };
+      if (typeof compDefOffset === 'number') {
+        const compDef = getCompDefAccAddress(mxePk, compDefOffset);
+        accounts = { ...accounts, compDefAcc: compDef.toBase58() };
+      }
+      try { 
+        accounts = { 
+          ...accounts, 
+          poolAccount: getStakingPoolAccAddress().toBase58(), 
+          clock: getClockAccAddress().toBase58() 
+        }; 
+      } catch {}
+    } catch {}
+  }
+
   const op = await operationRepository.create(tenantId, {
     name: body.name,
     version: body.version,
@@ -11,9 +52,11 @@ async function create(tenantId: string, body: any) {
     runtime: body.runtime,
     inputs: body.inputs || [],
     outputs: body.outputs || [],
+    mxeProgramId: body.mxeProgramId,
+    compDefOffset,
     ...(body.programId ? { programId: body.programId } : {}),
     ...(body.method ? { method: body.method } : {}),
-    ...(body.accounts ? { accounts: body.accounts } : {}),
+    ...(accounts ? { accounts } : {}),
   });
   return { operation_id: op.id, pipeline_hash: op.pipelineHash };
 }

@@ -15,6 +15,8 @@ export type TenantDocument = mongoose.Document & {
   publishableKey?: string;
   tenantPublicKey?: string;
   apiKeys: ApiKeyDoc[];
+  balanceCents: number;
+  plan: string;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -34,6 +36,8 @@ const tenantSchema = new Schema<TenantDocument>({
   publishableKey: { type: String, index: true },
   tenantPublicKey: { type: String },
   apiKeys: { type: [apiKeySchema], default: [] },
+  balanceCents: { type: Number, default: 100000 },
+  plan: { type: String, default: 'free' },
 }, { timestamps: true });
 
 export const TenantModel = mongoose.models.Tenant || mongoose.model<TenantDocument>('Tenant', tenantSchema);

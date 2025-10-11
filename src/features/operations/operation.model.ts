@@ -11,6 +11,8 @@ export type OperationDocument = mongoose.Document & {
   inputs: string[];
   outputs: string[];
   status: 'active' | 'deprecated';
+  mxeProgramId: string;
+  compDefOffset?: number;
   programId?: string;
   method?: string;
   accounts?: any;
@@ -29,6 +31,8 @@ const operationSchema = new Schema<any>({
   inputs: { type: [String], default: [] },
   outputs: { type: [String], default: [] },
   status: { type: String, enum: ['active', 'deprecated'], default: 'active' },
+  mxeProgramId: { type: String, required: true },
+  compDefOffset: { type: Number },
   programId: { type: String },
   method: { type: String },
   accounts: { type: Schema.Types.Mixed },

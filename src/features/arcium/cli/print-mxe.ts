@@ -15,7 +15,8 @@ async function main() {
   const provider = new anchor.AnchorProvider(connection, wallet, { commitment: 'confirmed' });
   anchor.setProvider(provider);
 
-  const mxeProgramId = arc.getArciumProgramId();
+  const arg = process.argv[2];
+  const mxeProgramId = arg ? new PublicKey(arg) : arc.getArciumProgramId();
 
   const withRetry = (arc as any).getMXEPublicKeyWithRetry as GetMXE | undefined;
   const getMXE: GetMXE = withRetry ?? (arc.getMXEPublicKey as GetMXE);

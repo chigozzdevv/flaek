@@ -11,13 +11,14 @@
     "arcium:mxe": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/print-mxe.ts",
     "arcium:derive": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/derive-accounts.ts",
     "arcium:idl": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/fetch-idl.ts",
-    "start:worker": "node dist/features/jobs/worker.cli.js",
-    "docker:arcium:mxe": "docker compose run --rm --no-deps server node dist/features/arcium/cli/print-mxe.js",
-    "docker:arcium:derive": "docker compose run --rm --no-deps server node dist/features/arcium/cli/derive-accounts.js",
-    "docker:arcium:idl": "docker compose run --rm --no-deps server node dist/features/arcium/cli/fetch-idl.js"
+    "arcium:upload": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/upload-circuit.ts",
+    "arcium:finalize": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/finalize-compdef.ts",
+    "arcium:list": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/list-mxes.ts"
+    
   },
   "dependencies": {
     "@arcium-hq/client": "^0.3.0",
+    "@arcium-hq/reader": "^0.3.0",
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/web3.js": "^1.98.4",
     "ajv": "^8.17.1",

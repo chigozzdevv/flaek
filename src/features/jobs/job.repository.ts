@@ -14,5 +14,8 @@ export const jobRepository = {
   async setStatus(jobId: string, status: string, patch: any = {}) {
     return JobModel.findByIdAndUpdate(jobId, { status, ...patch }, { new: true }).exec();
   },
+  async setResult(jobId: string, result: any) {
+    return JobModel.findByIdAndUpdate(jobId, { result }, { new: true }).exec();
+  },
 };
 

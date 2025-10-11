@@ -11,6 +11,7 @@ import { sha256Hex } from '@/utils/hash';
 import { operationRepository } from '@/features/operations/operation.repository';
 import { DatasetModel } from '@/features/datasets/dataset.model';
 import { JobModel } from '@/features/jobs/job.model';
+import { creditService } from '@/features/credits/credit.service';
 
 type IngestSource =
   | { type: 'ephemeral'; ref: string }
@@ -34,6 +35,7 @@ async function enqueueSubmission(jobId: string) {
 }
 
 async function createFromIngest(input: CreateFromIngestInput) {
+  await creditService.deduct(input.tenantId, 100, 'job_execution');
   const job = await jobRepository.create({
     tenantId: input.tenantId,
     datasetId: input.datasetId,
@@ -45,12 +47,14 @@ async function createFromIngest(input: CreateFromIngestInput) {
   return { job_id: job.id, status: job.status };
 }
 
-async function createInline(input: { tenantId: string; datasetId: string; operationId: string; rows: any[] }) {
+async function createInline(input: { tenantId: string; datasetId: string; operationId: string; rows: any[]; callbackUrl?: string }) {
+  await creditService.deduct(input.tenantId, 100, 'job_execution');
   const job = await jobRepository.create({
     tenantId: input.tenantId,
     datasetId: input.datasetId,
     operationId: input.operationId,
     source: { type: 'inline', rows: input.rows },
+    callbackUrl: input.callbackUrl,
     status: 'queued',
   });
   await enqueueSubmission(job.id);
@@ -65,6 +69,9 @@ async function get(tenantId: string, jobId: string) {
     status: job.status,
     result: job.result,
     attestation: job.attestation,
+    cost: job.cost,
+    created_at: job.createdAt,
+    updated_at: job.updatedAt,
   };
 }
 

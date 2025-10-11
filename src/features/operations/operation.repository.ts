@@ -2,7 +2,7 @@ import { OperationModel } from '@/features/operations/operation.model';
 
 export const operationRepository = {
   async create(tenantId: string, data: {
-    name: string; version: string; pipelineSpec: any; pipelineHash: string; artifactUri: string; runtime: 'container'|'wasm'|'arcium'; inputs: string[]; outputs: string[];
+    name: string; version: string; pipelineSpec: any; pipelineHash: string; artifactUri: string; runtime: 'container'|'wasm'|'arcium'; inputs: string[]; outputs: string[]; mxeProgramId: string; compDefOffset?: number; programId?: string; method?: string; accounts?: any;
   }) {
     const op = new OperationModel({ tenantId, ...data });
     return op.save();
@@ -17,4 +17,3 @@ export const operationRepository = {
     return OperationModel.updateOne({ _id: operationId, tenantId }, { $set: { status: 'deprecated' } }).exec();
   },
 };
-
