@@ -59,7 +59,7 @@ export default function BlocksShowcase() {
         }
       `}</style>
 
-      <div className="container-outer pt-20 md:pt-24">
+      <div className="container-outer pt-20 md:pt-32">
         <SectionDivider />
       </div>
 

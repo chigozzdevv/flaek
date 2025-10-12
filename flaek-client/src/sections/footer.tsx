@@ -1,6 +1,6 @@
 export default function Footer() {
   return (
-    <footer className="mt-16 border-t border-[var(--color-border)]">
+    <footer className="border-t border-[var(--color-border)]">
       <div className="container-outer py-8 flex flex-col md:flex-row items-center justify-between gap-4 text-sm text-text-secondary">
         <div>© {new Date().getFullYear()} Flaek</div>
         <nav className="flex items-center gap-5">
