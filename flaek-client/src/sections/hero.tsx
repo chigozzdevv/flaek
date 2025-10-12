@@ -20,17 +20,18 @@ export default function Hero() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7 }}
-          className="text-4xl md:text-6xl font-semibold tracking-tight max-w-5xl mx-auto"
+          className="text-4xl md:text-6xl font-semibold leading-tight tracking-tight text-balance max-w-4xl md:max-w-5xl mx-auto"
         >
-          Execute private compute on sensitive data
+          <span className="block">Execute private compute</span>
+          <span className="block">on sensitive data</span>
         </motion.h1>
         <motion.p
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.7, delay: 0.08 }}
-          className="mt-5 md:mt-6 text-lg md:text-xl text-text-secondary max-w-3xl mx-auto"
+          className="mt-6 md:mt-7 text-lg md:text-xl leading-7 md:leading-8 text-white/80 text-pretty max-w-2xl mx-auto"
         >
-          Design pipelines with a visual builder or use the API. Flaek orchestrates privacy‑preserving computation on Arcium and delivers signed results with on‑chain attestations.
+          Build dataset‑validated private compute pipelines with a visual builder or API, and integrate via signed webhooks — powered by Arcium.
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 16 }}

@@ -53,6 +53,10 @@
   50% { opacity: 0.14; }
 }
 
+/* Modern headline wrapping */
+.text-balance { text-wrap: balance; }
+.text-pretty { text-wrap: pretty; }
+
 /* Containers */
 .container-outer {
   @apply max-w-7xl mx-auto px-6 md:px-8;
