@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { apiGetJobs, apiGetJob, apiCancelJob, apiCreateJob } from '@/lib/api'
+import { io, Socket } from 'socket.io-client'
 
 type Job = {
   job_id: string
@@ -32,68 +33,59 @@ export default function JobsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [selectedJob, setSelectedJob] = useState<any>(null)
   const [showDetails, setShowDetails] = useState(false)
-  const pollIntervalRef = useRef<number | null>(null)
-  const eventSourceRef = useRef<EventSource | null>(null)
+  const [socketConnected, setSocketConnected] = useState(false)
+  const socketRef = useRef<Socket | null>(null)
 
   useEffect(() => {
     loadJobs()
-    setupSSE()
+    setupSocket()
     
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current)
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close()
-        eventSourceRef.current = null
+      if (socketRef.current) {
+        socketRef.current.disconnect()
+        socketRef.current = null
       }
     }
   }, [statusFilter])
 
-  function setupSSE() {
-    // Try SSE first, fallback to polling if it fails
-    try {
-      const token = localStorage.getItem('flaek_jwt')
-      if (!token) return setupPolling()
+  function setupSocket() {
+    const token = localStorage.getItem('flaek_jwt')
+    if (!token) return
 
-      const eventSource = new EventSource(`${import.meta.env.VITE_API_BASE || ''}/v1/jobs/events`, {
-        // @ts-ignore - EventSource doesn't support headers in standard API
-      })
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type === 'job.update') {
-            // Update job in list
-            setJobs(prevJobs => 
-              prevJobs.map(job => 
-                job.job_id === data.job_id
-                  ? { ...job, status: data.status, updated_at: data.updated_at }
-                  : job
-              )
-            )
-          }
-        } catch (err) {
-          console.error('Failed to parse SSE message:', err)
-        }
-      }
+    const socket = io(import.meta.env.VITE_API_BASE || 'http://localhost:4000', {
+      auth: {
+        token
+      },
+      reconnection: true,
+      reconnectionDelay: 1000,
+      reconnectionAttempts: 5,
+    })
 
-      eventSource.onerror = () => {
-        console.log('SSE connection failed, falling back to polling')
-        eventSource.close()
-        setupPolling()
-      }
+    socket.on('connect', () => {
+      console.log('Socket.IO connected')
+      setSocketConnected(true)
+    })
 
-      eventSourceRef.current = eventSource
-    } catch (error) {
-      console.error('SSE setup failed:', error)
-      setupPolling()
-    }
-  }
+    socket.on('job:update', (data: any) => {
+      setJobs(prevJobs => 
+        prevJobs.map(job => 
+          job.job_id === data.job_id
+            ? { ...job, status: data.status, updated_at: data.updated_at, ...data }
+            : job
+        )
+      )
+    })
 
-  function setupPolling() {
-    pollIntervalRef.current = window.setInterval(() => {
-      const hasActiveJobs = jobs.some(j => j.status === 'queued' || j.status === 'running')
-      if (hasActiveJobs) loadJobs(false)
-    }, 3000)
+    socket.on('disconnect', () => {
+      console.log('Socket.IO disconnected')
+      setSocketConnected(false)
+    })
+
+    socket.on('connect_error', (error) => {
+      console.error('Socket.IO connection error:', error.message)
+    })
+
+    socketRef.current = socket
   }
 
   async function loadJobs(showLoader: boolean = true) {
@@ -162,12 +154,20 @@ export default function JobsPage() {
   return (
     <div className="flex flex-col h-full">
       <div className="p-6 border-b border-white/10">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-bold">Jobs</h1>
-            <p className="text-sm text-white/60 mt-1">Track your pipeline execution jobs</p>
+            <div className="flex items-center gap-3 mb-1">
+              <h1 className="text-2xl font-bold">Jobs</h1>
+              {socketConnected && (
+                <div className="flex items-center gap-2 text-xs text-green-400 bg-green-500/10 px-2 py-1 rounded-full border border-green-500/20">
+                  <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  Live
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-white/60">Monitor and manage your batch processing jobs</p>
           </div>
-          <Button onClick={() => loadJobs()} variant="secondary">
+          <Button onClick={() => loadJobs()}>
             <RefreshCw size={16} />
             Refresh
           </Button>
@@ -232,11 +232,11 @@ export default function JobsPage() {
                       <div className="grid grid-cols-3 gap-4 text-sm">
                         <div>
                           <span className="text-white/50">Dataset:</span>
-                          <span className="ml-2 font-mono text-xs">{job.dataset_id.slice(0, 8)}...</span>
+                          <span className="ml-2 font-mono text-xs" title={job.dataset_id}>{job.dataset_id?.slice(0, 12) || 'N/A'}...</span>
                         </div>
                         <div>
                           <span className="text-white/50">Operation:</span>
-                          <span className="ml-2 font-mono text-xs">{job.operation_id.slice(0, 8)}...</span>
+                          <span className="ml-2 font-mono text-xs" title={job.operation_id}>{job.operation_id?.slice(0, 12) || 'N/A'}...</span>
                         </div>
                         <div>
                           <span className="text-white/50">Created:</span>

@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-flaek_mxe = "Hc6oVrp36jfCeSfaozozJyHk6PG9eWoFrj9PieJnCD2R"
+flaek_mxe = "F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6"
 
 [programs.devnet]
-flaek_mxe = "Hc6oVrp36jfCeSfaozozJyHk6PG9eWoFrj9PieJnCD2R"
+flaek_mxe = "F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6"
 
 [registry]
 url = "https://api.apr.dev"

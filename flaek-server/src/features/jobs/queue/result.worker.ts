@@ -20,6 +20,13 @@ export function startResultWorker() {
     const { jobId } = bullJob.data as { jobId: string };
     const job = await JobModel.findById(jobId).exec();
     if (!job) return;
+    
+    // Check if job was cancelled
+    if (job.status === 'cancelled') {
+      console.log(`Job ${jobId} was cancelled, skipping finalization`);
+      return;
+    }
+    
     if (!job.mxeProgramId || !job.computationOffset) return;
 
     const rpc = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';

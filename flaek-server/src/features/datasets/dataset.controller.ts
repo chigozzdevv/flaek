@@ -31,4 +31,19 @@ async function ingest(req: Request, res: Response) {
   res.status(202).json(out);
 }
 
-export const datasetController = { create, list, get, ingest };
+async function update(req: Request, res: Response) {
+  const tenantId = (req as any).tenantId as string;
+  const { datasetId } = req.params;
+  const { name, schema, retention_days } = req.body;
+  const out = await datasetService.update(tenantId, datasetId, { name, schema, retentionDays: retention_days });
+  res.json(out);
+}
+
+async function deprecate(req: Request, res: Response) {
+  const tenantId = (req as any).tenantId as string;
+  const { datasetId } = req.params;
+  const out = await datasetService.deprecate(tenantId, datasetId);
+  res.json(out);
+}
+
+export const datasetController = { create, list, get, update, ingest, deprecate };

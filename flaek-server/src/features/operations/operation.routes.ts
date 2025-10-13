@@ -9,6 +9,7 @@ router.use(unifiedAuth);
 router.post('/', schemaValidator(createOperationSchema), operationController.create);
 router.get('/', operationController.list);
 router.get('/:operationId', operationController.get);
+router.patch('/:operationId', operationController.update);
 router.post('/:operationId/deprecate', operationController.deprecate);
 
 export const operationRoutes = router;

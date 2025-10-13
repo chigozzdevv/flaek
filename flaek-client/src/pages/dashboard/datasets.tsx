@@ -1,12 +1,12 @@
 import { useState, useEffect } from 'react'
-import { Plus, Search, Database as DatabaseIcon, Loader2, Trash2 } from 'lucide-react'
+import { Plus, Search, Database as DatabaseIcon, Loader2, Trash2, Edit } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { Select } from '@/components/ui/select'
-import { apiGetDatasets, apiCreateDataset, apiDeprecateDataset } from '@/lib/api'
+import { apiGetDatasets, apiCreateDataset, apiDeprecateDataset, apiUpdateDataset } from '@/lib/api'
 
 type FieldType = 'u8' | 'u16' | 'u32' | 'u64' | 'bool' | 'string' | 'number'
 
@@ -117,6 +117,7 @@ export default function DatasetsPage() {
 function DatasetCard({ dataset, onUpdate }: { dataset: any; onUpdate: () => void }) {
   const [deprecating, setDeprecating] = useState(false)
   const [showDetails, setShowDetails] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
 
   async function handleDeprecate() {
     if (!confirm('Are you sure you want to deprecate this dataset?')) return
@@ -132,7 +133,7 @@ function DatasetCard({ dataset, onUpdate }: { dataset: any; onUpdate: () => void
     }
   }
 
-  const fieldCount = dataset.schema?.properties ? Object.keys(dataset.schema.properties).length : 0
+  const fieldCount = dataset.field_count || (dataset.schema?.properties ? Object.keys(dataset.schema.properties).length : 0)
 
   return (
     <>
@@ -161,16 +162,21 @@ function DatasetCard({ dataset, onUpdate }: { dataset: any; onUpdate: () => void
             <Button variant="secondary" className="text-xs px-3 py-1.5" onClick={() => setShowDetails(true)}>
               View
             </Button>
-          {dataset.status === 'active' && (
-            <Button
-              variant="ghost"
-              className="text-xs px-2 py-1.5 text-red-400 hover:bg-red-500/10"
-              onClick={handleDeprecate}
-              loading={deprecating}
-            >
-              <Trash2 size={14} />
-            </Button>
-          )}
+            {dataset.status === 'active' && (
+              <>
+                <Button variant="ghost" className="text-xs px-2 py-1.5" onClick={() => setShowEdit(true)}>
+                  <Edit size={14} />
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="text-xs px-2 py-1.5 text-red-400 hover:bg-red-500/10"
+                  onClick={handleDeprecate}
+                  loading={deprecating}
+                >
+                  <Trash2 size={14} />
+                </Button>
+              </>
+            )}
         </div>
       </div>
     </Card>
@@ -180,6 +186,14 @@ function DatasetCard({ dataset, onUpdate }: { dataset: any; onUpdate: () => void
         dataset={dataset}
         open={showDetails}
         onClose={() => setShowDetails(false)}
+      />
+    )}
+    {showEdit && (
+      <EditDatasetModal
+        dataset={dataset}
+        open={showEdit}
+        onClose={() => setShowEdit(false)}
+        onUpdate={onUpdate}
       />
     )}
     </>
@@ -443,6 +457,64 @@ function CreateDatasetModal({ open, onClose, onSuccess }: {
         <div className="flex items-center gap-3 pt-4">
           <Button type="submit" loading={loading} className="flex-1">
             Create Dataset
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
+    </Modal>
+  )
+}
+
+function EditDatasetModal({ dataset, open, onClose, onUpdate }: { dataset: any; open: boolean; onClose: () => void; onUpdate: () => void }) {
+  const [name, setName] = useState(dataset.name)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) {
+      setError('Dataset name is required')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await apiUpdateDataset(dataset.dataset_id, { name: name.trim() })
+      onUpdate()
+      onClose()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update dataset')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Dataset">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-xs font-semibold text-white/70 mb-2 block">Dataset Name</label>
+          <Input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., Customer Data"
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <Button type="submit" loading={loading} className="flex-1">
+            Update Dataset
           </Button>
           <Button type="button" variant="secondary" onClick={onClose}>
             Cancel

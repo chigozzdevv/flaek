@@ -83,8 +83,15 @@ async function get(tenantId: string, operationId: string) {
   };
 }
 
+async function update(tenantId: string, operationId: string, updates: { name?: string; version?: string }) {
+  const op = await operationRepository.get(tenantId, operationId);
+  if (!op) throw httpError(404, 'not_found', 'operation_not_found');
+  await operationRepository.update(operationId, updates);
+  return { operation_id: operationId, ...updates };
+}
+
 async function deprecate(tenantId: string, operationId: string) {
   await operationRepository.deprecate(tenantId, operationId);
 }
 
-export const operationService = { create, list, get, deprecate };
+export const operationService = { create, list, get, update, deprecate };

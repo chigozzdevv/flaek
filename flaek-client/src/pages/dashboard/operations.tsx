@@ -1,11 +1,11 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Box, Trash2, Eye, Plus, Search, Play } from 'lucide-react'
+import { Loader2, Box, Trash2, Eye, Plus, Search, Play, Edit } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { navigate } from '@/lib/router'
-import { apiGetOperations, apiGetOperation, apiDeprecateOperation, apiCreateJob, apiGetDatasets } from '@/lib/api'
+import { apiGetOperations, apiGetOperation, apiDeprecateOperation, apiCreateJob, apiGetDatasets, apiUpdateOperation } from '@/lib/api'
 
 type Operation = {
   operation_id: string
@@ -23,6 +23,8 @@ export default function OperationsPage() {
   const [selectedOp, setSelectedOp] = useState<any>(null)
   const [showDetails, setShowDetails] = useState(false)
   const [showRunModal, setShowRunModal] = useState(false)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editingOp, setEditingOp] = useState<any>(null)
   const [runningOp, setRunningOp] = useState<any>(null)
 
   useEffect(() => {
@@ -170,14 +172,26 @@ export default function OperationsPage() {
                       View
                     </Button>
                     {op.status === 'active' && (
-                      <Button
-                        variant="ghost"
-                        onClick={() => deprecateOperation(op.operation_id, op.name)}
-                        className="text-xs text-red-400 hover:text-red-300"
-                      >
-                        <Trash2 size={14} />
-                        Deprecate
-                      </Button>
+                      <>
+                        <Button
+                          variant="ghost"
+                          onClick={() => {
+                            setEditingOp(op)
+                            setShowEdit(true)
+                          }}
+                          className="text-xs"
+                        >
+                          <Edit size={14} />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          onClick={() => deprecateOperation(op.operation_id, op.name)}
+                          className="text-xs text-red-400 hover:text-red-300"
+                        >
+                          <Trash2 size={14} />
+                          Deprecate
+                        </Button>
+                      </>
                     )}
                   </div>
                 </div>
@@ -186,6 +200,18 @@ export default function OperationsPage() {
           </div>
         )}
       </div>
+
+      {showEdit && editingOp && (
+        <EditOperationModal
+          operation={editingOp}
+          open={showEdit}
+          onClose={() => {
+            setShowEdit(false)
+            setEditingOp(null)
+          }}
+          onUpdate={loadOperations}
+        />
+      )}
 
       {showRunModal && runningOp && (
         <RunJobModal
@@ -403,6 +429,80 @@ function RunJobModal({ operation, open, onClose }: { operation: any; open: boole
           </Button>
         </div>
       </div>
+    </Modal>
+  )
+}
+
+function EditOperationModal({ operation, open, onClose, onUpdate }: { operation: any; open: boolean; onClose: () => void; onUpdate: () => void }) {
+  const [name, setName] = useState(operation.name)
+  const [version, setVersion] = useState(operation.version)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault()
+    if (!name.trim()) {
+      setError('Operation name is required')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+
+    try {
+      await apiUpdateOperation(operation.operation_id, { 
+        name: name.trim(), 
+        version: version.trim() 
+      })
+      onUpdate()
+      onClose()
+    } catch (err: any) {
+      setError(err.message || 'Failed to update operation')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Modal open={open} onClose={onClose} title="Edit Operation">
+      <form onSubmit={handleSubmit} className="space-y-4">
+        <div>
+          <label className="text-xs font-semibold text-white/70 mb-2 block">Operation Name</label>
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g., credit-score-calculator"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-500/50"
+          />
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-white/70 mb-2 block">Version</label>
+          <input
+            type="text"
+            value={version}
+            onChange={(e) => setVersion(e.target.value)}
+            placeholder="e.g., 1.0.0"
+            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-500/50"
+          />
+        </div>
+
+        {error && (
+          <div className="rounded-lg bg-red-500/10 border border-red-500/20 px-4 py-3 text-sm text-red-400">
+            {error}
+          </div>
+        )}
+
+        <div className="flex items-center gap-3">
+          <Button type="submit" loading={loading} className="flex-1">
+            Update Operation
+          </Button>
+          <Button type="button" variant="secondary" onClick={onClose}>
+            Cancel
+          </Button>
+        </div>
+      </form>
     </Modal>
   )
 }

@@ -9,17 +9,31 @@ export async function executePipeline(
   operation: OperationDocument,
   inputData: any
 ): Promise<void> {
+  console.log(`[Pipeline Executor] Starting execution for job ${job.id}`);
+  
   if (!operation.pipelineSpec || operation.pipelineSpec.type !== 'visual_pipeline') {
     throw new Error('Operation is not a visual pipeline');
   }
 
+  // Check if job was cancelled before execution
+  const currentJob = await JobModel.findById(job.id).exec();
+  if (currentJob?.status === 'cancelled') {
+    console.log(`Job ${job.id} was cancelled during pipeline execution`);
+    return;
+  }
+
   const pipeline = operation.pipelineSpec.pipeline as PipelineDefinition;
+  console.log(`[Pipeline Executor] MXE Program ID: ${operation.mxeProgramId}`);
+  console.log(`[Pipeline Executor] Pipeline nodes: ${pipeline.nodes.length}, edges: ${pipeline.edges.length}`);
+  
   const engine = new PipelineEngine(operation.mxeProgramId);
 
   try {
+    console.log(`[Pipeline Executor] Executing pipeline...`);
     const result = await engine.execute(pipeline, inputData, {
       cluster: operation.accounts?.cluster,
     });
+    console.log(`[Pipeline Executor] Pipeline executed successfully, ${result.steps.length} steps`);
 
     const attestation = {
       provider: 'arcium',
@@ -41,6 +55,8 @@ export async function executePipeline(
       cost,
     });
   } catch (error: any) {
+    console.error(`[Pipeline Executor] Pipeline execution failed for job ${job.id}:`, error.message);
+    
     // Parse and structure the error message for better UX
     let structuredError = error.message;
     
@@ -57,6 +73,6 @@ export async function executePipeline(
     await jobRepository.setStatus(job.id, 'failed', { 
       error: structuredError,
     });
-    throw error;
+    // Don't rethrow - job status is already set to failed
   }
 }

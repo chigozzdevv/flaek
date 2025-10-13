@@ -25,6 +25,9 @@ async function createOperationFromPipeline(
   const inputs = inputNodes.map(n => n.data?.fieldName || n.id);
   const outputs = outputNodes.map(n => n.data?.fieldName || n.id);
 
+  const clusterPubkey = process.env.ARCIUM_CLUSTER_PUBKEY;
+  const accounts = clusterPubkey ? { cluster: clusterPubkey } : undefined;
+
   const operation = await operationRepository.create(tenantId, {
     name: metadata.name,
     version: metadata.version,
@@ -35,6 +38,7 @@ async function createOperationFromPipeline(
     inputs,
     outputs,
     mxeProgramId: metadata.mxeProgramId,
+    ...(accounts ? { accounts } : {}),
   });
 
   return {

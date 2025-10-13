@@ -6,7 +6,6 @@ import { createJobSchema } from '@/features/jobs/job.validators';
 
 const router = Router();
 router.use(unifiedAuth);
-router.get('/events', jobController.events); // SSE endpoint
 router.post('/', schemaValidator(createJobSchema), jobController.create);
 router.get('/', jobController.list);
 router.get('/:jobId', jobController.get);

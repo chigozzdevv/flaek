@@ -31,7 +31,9 @@ const queueEvents = new QueueEvents(JOB_QUEUE, { connection });
 
 async function enqueueSubmission(jobId: string) {
   const opts: JobsOptions = { removeOnComplete: 100, removeOnFail: 100 };
-  await queue.add('submit', { jobId }, opts);
+  console.log(`[Job Service] Enqueuing job: ${jobId}`);
+  const bullJob = await queue.add('submit', { jobId }, opts);
+  console.log(`[Job Service] Job enqueued with BullMQ ID: ${bullJob.id}`);
 }
 
 async function createFromIngest(input: CreateFromIngestInput) {
@@ -77,9 +79,45 @@ async function get(tenantId: string, jobId: string) {
 
 async function list(tenantId: string) {
   const items = await jobRepository.list(tenantId);
-  return { items: items.map(j => ({ job_id: j.id, status: j.status, created_at: j.createdAt })) };
+  return { 
+    items: items.map(j => ({ 
+      job_id: j.id, 
+      dataset_id: j.datasetId,
+      operation_id: j.operationId,
+      status: j.status, 
+      created_at: j.createdAt,
+      updated_at: j.updatedAt,
+      error: j.error,
+    })) 
+  };
 }
 
-// Worker moved to submit.worker.ts; this module focuses on enqueueing and queries.
+async function cancel(tenantId: string, jobId: string) {
+  const job = await jobRepository.get(tenantId, jobId);
+  if (!job) throw httpError(404, 'not_found', 'job_not_found');
+  
+  if (job.status === 'completed' || job.status === 'failed' || job.status === 'cancelled') {
+    throw httpError(400, 'invalid_state', 'Job already finished');
+  }
+  
+  await jobRepository.setStatus(jobId, 'cancelled', { 
+    error: 'Job cancelled by user' 
+  });
+  
+  // Try to remove from queue if it's still queued
+  try {
+    const bullQueue = queue;
+    const jobs = await bullQueue.getJobs(['waiting', 'active', 'delayed']);
+    for (const bullJob of jobs) {
+      if (bullJob.data.jobId === jobId) {
+        await bullJob.remove();
+      }
+    }
+  } catch (err) {
+    console.error('Failed to remove job from queue:', err);
+  }
+  
+  return { job_id: jobId, status: 'cancelled' };
+}
 
-export const jobService = { createFromIngest, createInline, get, list };
+export const jobService = { createFromIngest, createInline, get, list, cancel };

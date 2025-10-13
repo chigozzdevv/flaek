@@ -15,13 +15,34 @@ async function create(tenantId: string, name: string, schema: any, retentionDays
 
 async function list(tenantId: string) {
   const items = await datasetRepository.listByTenant(tenantId);
-  return { items: items.map(i => ({ dataset_id: i.id, name: i.name, created_at: i.createdAt, status: i.status })) };
+  return { items: items.map(i => ({ 
+    dataset_id: i.id, 
+    name: i.name, 
+    created_at: i.createdAt, 
+    status: i.status,
+    field_count: i.schema?.properties ? Object.keys(i.schema.properties).length : 0,
+    batch_count: i.batches?.length || 0,
+  })) };
 }
 
 async function get(tenantId: string, datasetId: string) {
   const ds = await datasetRepository.getById(tenantId, datasetId);
   if (!ds) throw httpError(404, 'not_found', 'dataset_not_found');
   return { dataset_id: ds.id, name: ds.name, schema: ds.schema, retention_days: ds.retentionDays, created_at: ds.createdAt, status: ds.status };
+}
+
+async function update(tenantId: string, datasetId: string, updates: { name?: string; schema?: any; retentionDays?: number }) {
+  const ds = await datasetRepository.getById(tenantId, datasetId);
+  if (!ds) throw httpError(404, 'not_found', 'dataset_not_found');
+  await datasetRepository.update(datasetId, updates);
+  return { dataset_id: datasetId, ...updates };
+}
+
+async function deprecate(tenantId: string, datasetId: string) {
+  const ds = await datasetRepository.getById(tenantId, datasetId);
+  if (!ds) throw httpError(404, 'not_found', 'dataset_not_found');
+  await datasetRepository.updateStatus(datasetId, 'deprecated');
+  return { dataset_id: datasetId, status: 'deprecated' };
 }
 
 async function ingest(tenantId: string, datasetId: string, body: string, contentType?: string, runOperationId?: string) {
@@ -103,4 +124,4 @@ async function ingest(tenantId: string, datasetId: string, body: string, content
   return { batch_id: batchId, rows_accepted: rows.length, dataset_id: ds.id, status: 'queued', job_id: job.job_id } as any;
 }
 
-export const datasetService = { create, list, get, ingest };
+export const datasetService = { create, list, get, update, ingest, deprecate };

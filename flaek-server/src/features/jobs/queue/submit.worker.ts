@@ -15,9 +15,24 @@ export function startSubmitWorker() {
   const connection = getRedis();
   const queue = new Queue(JOB_QUEUE, { connection });
   const worker = new Worker(JOB_QUEUE, async (bullJob) => {
+    // Only process submit jobs
+    if (bullJob.name !== 'submit') return;
+    
     const { jobId } = bullJob.data as { jobId: string };
+    console.log(`[Submit Worker] Processing job: ${jobId}`);
     const job = await JobModel.findById(jobId).exec();
-    if (!job) return;
+    if (!job) {
+      console.error(`[Submit Worker] Job not found: ${jobId}`);
+      return;
+    }
+    
+    // Check if job was cancelled before we started processing
+    if (job.status === 'cancelled') {
+      console.log(`Job ${jobId} was cancelled, skipping execution`);
+      return;
+    }
+    
+    console.log(`[Submit Worker] Setting job ${jobId} to running`);
     await jobRepository.setStatus(jobId, 'running');
 
     const op = await operationRepository.get(job.tenantId, job.operationId);
@@ -55,19 +70,23 @@ export function startSubmitWorker() {
     }
 
     if (op.pipelineSpec?.type === 'visual_pipeline') {
+      console.log(`[Submit Worker] Job ${jobId} is a visual pipeline, executing...`);
       const inputData = buffer ? JSON.parse(buffer.toString()) : {};
       await executePipeline(job, op, inputData);
+      console.log(`[Submit Worker] Visual pipeline execution completed for job ${jobId}`);
       return;
     }
 
-    if (!op.mxeProgramId || typeof (op as any).compDefOffset !== 'number') {
-      await jobRepository.setStatus(jobId, 'failed', { error: 'arcium_configuration_missing', details: { mxeProgramId: !!op.mxeProgramId, compDefOffset: (op as any).compDefOffset } });
+    const circuitName = (op as any).pipelineSpec?.circuit_name || (op as any).pipelineSpec?.circuitName;
+    if (!op.mxeProgramId || typeof (op as any).compDefOffset !== 'number' || !circuitName) {
+      await jobRepository.setStatus(jobId, 'failed', { error: 'arcium_configuration_missing', details: { mxeProgramId: !!op.mxeProgramId, compDefOffset: (op as any).compDefOffset, circuitName } });
       return;
     }
     const sdk = new ArciumClient();
     const { tx, computationOffset, nonceB64, clientPubKeyB64, clientPrivB64 } = await sdk.submitQueue({
       mxeProgramId: op.mxeProgramId,
       compDefOffset: (op as any).compDefOffset as number,
+      circuit: circuitName,
       accounts: op.accounts || {},
       payload: buffer,
     });

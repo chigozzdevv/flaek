@@ -19,4 +19,14 @@ export const datasetRepository = {
   async removeBatchById(datasetId: string, batchId: string) {
     await DatasetModel.updateOne({ _id: datasetId }, { $pull: { batches: { batchId } } }).exec();
   },
+  async updateStatus(datasetId: string, status: 'active' | 'deprecated') {
+    await DatasetModel.updateOne({ _id: datasetId }, { status }).exec();
+  },
+  async update(datasetId: string, updates: { name?: string; schema?: any; retentionDays?: number }) {
+    const updateFields: any = {};
+    if (updates.name !== undefined) updateFields.name = updates.name;
+    if (updates.schema !== undefined) updateFields.schema = updates.schema;
+    if (updates.retentionDays !== undefined) updateFields.retentionDays = updates.retentionDays;
+    await DatasetModel.updateOne({ _id: datasetId }, updateFields).exec();
+  },
 };

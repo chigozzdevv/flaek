@@ -16,5 +16,7 @@ router.post(
   express.text({ type: '*/*', limit: '10mb' }),
   datasetController.ingest
 );
+router.patch('/:datasetId', datasetController.update);
+router.post('/:datasetId/deprecate', datasetController.deprecate);
 
 export const datasetRoutes = router;

@@ -13,10 +13,10 @@ async function request(path: string, opts: RequestInit = {}) {
   }
   
   const res = await fetch(`${API_BASE}${path}`, {
-    method: 'GET',
+    ...opts,
+    method: opts.method || 'GET',
     headers,
     credentials: 'include',
-    ...opts,
   })
   const ct = res.headers.get('content-type') || ''
   const body = ct.includes('application/json') ? await res.json() : await res.text()
@@ -94,6 +94,8 @@ export async function apiGetDatasets() {
       created_at: string
       status: 'active' | 'deprecated'
       batch_count?: number
+      field_count?: number
+      schema?: any
     }>
   }>
 }
@@ -114,6 +116,10 @@ export async function apiCreateDataset(input: { name: string; schema: any; reten
   return request('/v1/datasets', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
     dataset_id: string
   }>
+}
+
+export async function apiUpdateDataset(id: string, data: { name?: string; schema?: any; retention_days?: number }) {
+  return request(`/v1/datasets/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export async function apiDeprecateDataset(id: string) {
@@ -156,6 +162,10 @@ export async function apiCreateOperation(input: {
   mxeProgramId: string
 }) {
   return request('/v1/pipelines/operations', { method: 'POST', body: JSON.stringify(input) }) as Promise<any>
+}
+
+export async function apiUpdateOperation(id: string, data: { name?: string; version?: string }) {
+  return request(`/v1/operations/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
 export async function apiDeprecateOperation(id: string) {

@@ -17,6 +17,14 @@ async function get(req: Request, res: Response) {
   const out = await operationService.get(tenantId, operationId);
   res.json(out);
 }
+async function update(req: Request, res: Response) {
+  const tenantId = (req as any).tenantId as string;
+  const { operationId } = req.params;
+  const { name, version } = req.body;
+  const out = await operationService.update(tenantId, operationId, { name, version });
+  res.json(out);
+}
+
 async function deprecate(req: Request, res: Response) {
   const tenantId = (req as any).tenantId as string;
   const { operationId } = req.params;
@@ -24,4 +32,4 @@ async function deprecate(req: Request, res: Response) {
   res.status(204).end();
 }
 
-export const operationController = { create, list, get, deprecate };
+export const operationController = { create, list, get, update, deprecate };

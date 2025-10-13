@@ -169,7 +169,7 @@ const TEMPLATES = [
 function PublishPipelineModal({ open, onClose, pipeline }: { open: boolean; onClose: () => void; pipeline: any }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('Hc6oVrp36jfCeSfaozozJyHk6PG9eWoFrj9PieJnCD2R')
+  const [mxeProgramId, setMxeProgramId] = useState('F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)
@@ -201,11 +201,20 @@ function PublishPipelineModal({ open, onClose, pipeline }: { open: boolean; onCl
     setError('')
     
     try {
+      // Normalize nodes: ensure blockId is at top level for backend
+      const normalizedNodes = pipeline.nodes.map((node: any) => ({
+        id: node.id,
+        type: node.type,
+        blockId: node.data?.blockId || node.blockId,
+        data: node.data,
+        position: node.position,
+      }))
+
       const result = await apiCreateOperation({
         name: name.trim(),
         version: version.trim(),
         pipeline: {
-          nodes: pipeline.nodes,
+          nodes: normalizedNodes,
           edges: pipeline.edges,
         },
         mxeProgramId,
@@ -491,8 +500,17 @@ export default function PipelineBuilderPage() {
     setTesting(true)
 
     try {
+      // Normalize nodes: ensure blockId is at top level for backend
+      const normalizedNodes = nodes.map((node: any) => ({
+        id: node.id,
+        type: node.type,
+        blockId: node.data?.blockId || node.blockId,
+        data: node.data,
+        position: node.position,
+      }))
+
       const result = await apiTestPipeline({
-        pipeline: { nodes, edges },
+        pipeline: { nodes: normalizedNodes, edges },
         inputs: testInputs,
       })
 

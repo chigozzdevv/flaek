@@ -64,12 +64,17 @@ export class PipelineEngine {
     };
 
     const inputNodes = pipeline.nodes.filter(n => n.type === 'input');
+    console.log(`[Pipeline Executor] Loading ${inputNodes.length} input nodes with data:`, inputs);
     for (const inputNode of inputNodes) {
       const fieldName = inputNode.data?.fieldName || inputNode.id;
       if (inputs[fieldName] !== undefined) {
-        context.values.set(`${inputNode.id}.value`, inputs[fieldName]);
+        const key = `${inputNode.id}.value`;
+        console.log(`[Pipeline Executor] Setting ${key} = ${inputs[fieldName]}`);
+        context.values.set(key, inputs[fieldName]);
       }
     }
+    
+    console.log(`[Pipeline Executor] Pipeline edges:`, JSON.stringify(pipeline.edges, null, 2));
 
     const executionSteps: ExecutionStep[] = [];
 
@@ -87,14 +92,7 @@ export class PipelineEngine {
       const nodeInputs = this.gatherNodeInputs(node, pipeline, context);
       const stepStart = Date.now();
       try {
-        
-        let result: any;
-        if (options?.dryRun) {
-          // Mock execution
-          result = { result: 0 };
-        } else {
-          result = await this.executeBlock(block.circuit, nodeInputs, options);
-        }
+        const result = await this.executeBlock(block.circuit, nodeInputs, options);
 
         for (const [outputName, value] of Object.entries(result)) {
           context.values.set(`${nodeId}.${outputName}`, value);
@@ -158,13 +156,17 @@ export class PipelineEngine {
     options?: { cluster?: string }
   ): Promise<Record<string, any>> {
     try {
+      console.log(`[Pipeline Executor] Executing circuit '${circuit}' with inputs:`, inputs);
       const compDefOffset = getCircuitOffset(circuit);
       
-      const payload = Buffer.from(JSON.stringify(inputs), 'utf8');
+      // Encode inputs as binary (u64 = 8 bytes little-endian)
+      const payload = this.encodeCircuitInputs(inputs);
+      console.log(`[Pipeline Executor] Encoded payload (${payload.length} bytes):`, payload.toString('hex'));
       
       const result = await this.arciumClient.submitQueue({
         mxeProgramId: this.mxeProgramId.toBase58(),
         compDefOffset,
+        circuit,
         accounts: options?.cluster ? { cluster: options.cluster } : {},
         payload,
       });
@@ -175,6 +177,30 @@ export class PipelineEngine {
     }
   }
 
+  private encodeCircuitInputs(inputs: Record<string, any>): Buffer {
+    // Encode each input field as a separate 32-byte chunk (for Arcium encryption)
+    // Each u64 value is padded to 32 bytes
+    if (!inputs || typeof inputs !== 'object') {
+      throw new Error(`Invalid inputs: expected object, got ${typeof inputs}`);
+    }
+    
+    const buffers: Buffer[] = [];
+    
+    for (const [key, value] of Object.entries(inputs)) {
+      console.log(`[Pipeline Executor] Encoding ${key}=${value} (type: ${typeof value})`);
+      // Each field gets a full 32-byte chunk (padded)
+      const buf = Buffer.alloc(32);
+      buf.writeBigUInt64LE(BigInt(value), 0);
+      buffers.push(buf);
+    }
+    
+    if (buffers.length === 0) {
+      throw new Error('No inputs to encode');
+    }
+    
+    return Buffer.concat(buffers);
+  }
+
   private gatherNodeInputs(
     node: PipelineNode,
     pipeline: PipelineDefinition,
@@ -182,18 +208,38 @@ export class PipelineEngine {
   ): Record<string, any> {
     const inputs: Record<string, any> = {};
 
+    // Only copy constant input values from node.data, skip metadata fields
     if (node.data) {
-      Object.assign(inputs, node.data);
+      const metadataKeys = ['label', 'blockId', 'block', 'fieldName'];
+      for (const [key, value] of Object.entries(node.data)) {
+        if (!metadataKeys.includes(key) && value !== undefined) {
+          inputs[key] = value;
+        }
+      }
     }
 
     const incomingEdges = pipeline.edges.filter(e => e.target === node.id);
     
     for (const edge of incomingEdges) {
-      const sourceOutput = edge.sourceHandle || 'result';
-      const targetInput = edge.targetHandle || 'value';
+      // Find source node to determine the correct output key
+      const sourceNode = pipeline.nodes.find(n => n.id === edge.source);
+      const defaultOutput = sourceNode?.type === 'input' ? 'value' : 'result';
+      
+      const sourceOutput = edge.sourceHandle || defaultOutput;
+      
+      // For targetInput: use edge.targetHandle, or if source is an input node, use its fieldName
+      let targetInput = edge.targetHandle;
+      if (!targetInput && sourceNode?.type === 'input' && sourceNode.data?.fieldName) {
+        targetInput = sourceNode.data.fieldName;
+      }
+      if (!targetInput) {
+        targetInput = 'value'; // fallback
+      }
       
       const key = `${edge.source}.${sourceOutput}`;
       const value = context.values.get(key);
+      
+      console.log(`[Pipeline Executor] Edge ${edge.source} -> ${node.id}: looking for '${key}', found:`, value, `(will map to '${targetInput}')`);
       
       if (value !== undefined) {
         inputs[targetInput] = value;

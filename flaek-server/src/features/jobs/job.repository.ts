@@ -1,5 +1,5 @@
 import { JobModel } from '@/features/jobs/job.model';
-import { broadcastJobUpdate } from '@/features/jobs/job.sse';
+import { broadcastJobUpdate } from '@/features/jobs/job.socket';
 
 export const jobRepository = {
   async create(data: any) {

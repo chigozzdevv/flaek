@@ -1,6 +1,6 @@
 import * as anchor from '@coral-xyz/anchor';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { x25519, RescueCipher, getMXEPublicKey, deserializeLE, getArciumProgram, getArciumProgramId, getComputationAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getCompDefAccAddress, getStakingPoolAccAddress, getClockAccAddress } from '@arcium-hq/client';
+import { x25519, RescueCipher, getMXEPublicKey, deserializeLE, getArciumProgram, getArciumProgramId, getComputationAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getCompDefAccAddress, getStakingPoolAccAddress, getClockAccAddress, getMXEAccAddress } from '@arcium-hq/client';
 import crypto from 'crypto';
 
 export type ArciumJobRequest = {
@@ -75,13 +75,43 @@ export class ArciumClient {
     return { tx, computationOffset: computationOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
   }
 
-  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; accounts?: Record<string, string> }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string; clientPrivB64: string }> {
+  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; circuit: string; accounts?: Record<string, string> }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string; clientPrivB64: string }> {
     const mxeProgramId = new PublicKey(input.mxeProgramId);
     const provider = this.provider;
-    const arciumProgram = getArciumProgram(provider as any);
+    
+    // Load MXE program IDL - use process.cwd() to get project root
+    const path = require('path');
+    const fs = require('fs');
+    const idlPath = path.join(process.cwd(), 'flaek_mxe/target/idl/flaek_mxe.json');
+    console.log('[Arcium Client] Loading IDL from:', idlPath);
+    
+    if (!fs.existsSync(idlPath)) {
+      throw new Error(`IDL file not found at: ${idlPath}`);
+    }
+    
+    const idl = JSON.parse(fs.readFileSync(idlPath, 'utf-8'));
+    console.log('[Arcium Client] IDL loaded, program name:', idl.metadata?.name);
+    const mxeProgram = new (anchor as any).Program(idl, mxeProgramId, provider);
 
-    const mxePublicKey = await getMXEPublicKey(provider as any, mxeProgramId);
+    console.log('[Arcium Client] Getting MXE public key for:', mxeProgramId.toBase58());
+    let mxePublicKey: Uint8Array | null = null;
+    let retries = 3;
+    while (retries > 0 && !mxePublicKey) {
+      try {
+        mxePublicKey = await getMXEPublicKey(provider as any, mxeProgramId);
+        if (mxePublicKey) break;
+      } catch (err: any) {
+        retries--;
+        if (retries > 0) {
+          console.log(`[Arcium Client] Failed to get MXE public key (${err.message}), retrying... (${retries} attempts left)`);
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } else {
+          throw new Error(`Failed to get MXE public key after 3 attempts: ${err.message}`);
+        }
+      }
+    }
     if (!mxePublicKey) throw new Error('MXE public key not set for the given MXE program');
+    console.log('[Arcium Client] MXE public key retrieved');
 
     const priv = x25519.utils.randomSecretKey();
     const pub = x25519.getPublicKey(priv);
@@ -101,6 +131,7 @@ export class ArciumClient {
 
     const compOffset = new (anchor as any).BN(crypto.randomBytes(8).toString('hex'), 16);
     const compAcc = getComputationAccAddress(mxeProgramId, compOffset);
+    const mxeAcc = getMXEAccAddress(mxeProgramId);
     const mempool = getMempoolAccAddress(mxeProgramId);
     const executingPool = getExecutingPoolAccAddress(mxeProgramId);
     const compDef = getCompDefAccAddress(mxeProgramId, input.compDefOffset);
@@ -114,39 +145,33 @@ export class ArciumClient {
 
     const signSeed = PublicKey.findProgramAddressSync([Buffer.from('SignerAccount')], getArciumProgramId());
 
-    const argsVec: any[] = [
-      { arcisPubkey: Array.from(pub) },
-      { plaintextU128: new (anchor as any).BN(deserializeLE(nonce).toString()) },
-      { encryptedU8: Array.from(ct[0] as unknown as Uint8Array) },
-      { encryptedU8: Array.from(ct[1] as unknown as Uint8Array) },
-    ];
-
-    const tx = await (arciumProgram.methods as any)
-      .queueComputation(
-        compOffset,
-        input.compDefOffset,
-        null,
-        argsVec,
-        mxeProgramId,
-        null,
-        [],
-        new (anchor as any).BN(0),
-        new (anchor as any).BN(0),
-        new (anchor as any).BN(0)
-      )
-      .accounts({
-        signer: (provider.wallet as any).publicKey,
-        signSeed: signSeed[0],
-        comp: compAcc,
-        mxe: mxeProgramId,
-        executingPool,
-        mempool,
-        compDefAcc: compDef,
-        cluster,
-        poolAccount,
-        systemProgram: anchor.web3.SystemProgram.programId,
-        clock,
-      })
+    // Call the MXE program method directly (like the docs example)
+    const method = (mxeProgram.methods as any)[input.circuit];
+    if (!method) throw new Error(`Method ${input.circuit} not found in MXE program`);
+    
+    console.log('[Arcium Client] Calling MXE program method:', input.circuit);
+    
+    // Build the required accounts as per Arcium docs
+    const accounts = {
+      computationAccount: compAcc,
+      clusterAccount: cluster,
+      mxeAccount: mxeAcc,
+      mempoolAccount: mempool,
+      executingPool,
+      compDefAccount: compDef,
+      ...input.accounts, // Merge any additional accounts
+    };
+    
+    console.log('[Arcium Client] Accounts:', Object.keys(accounts));
+    
+    const tx = await method(
+      compOffset,
+      Array.from(ct[0]),
+      Array.from(ct[1]),
+      Array.from(pub),
+      new (anchor as any).BN(deserializeLE(nonce).toString())
+    )
+      .accountsPartial(accounts)
       .rpc({ commitment: 'finalized' });
 
     return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64'), clientPrivB64: Buffer.from(priv).toString('base64') };
