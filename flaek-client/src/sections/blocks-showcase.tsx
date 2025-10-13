@@ -42,7 +42,7 @@ const BLOCKS = [
 
 export default function BlocksShowcase() {
   return (
-    <section className="section-demo relative overflow-hidden">
+    <section id="blocks" className="section-demo relative overflow-hidden scroll-mt-24 md:scroll-mt-28">
       <style>{`
         @keyframes float-up {
           0% {
@@ -56,6 +56,9 @@ export default function BlocksShowcase() {
         }
         .float-block {
           animation: float-up 3s ease-in-out infinite;
+        }
+        @media (max-width: 640px) {
+          .float-block { animation: none; }
         }
       `}</style>
 
@@ -79,7 +82,7 @@ export default function BlocksShowcase() {
           </p>
         </motion.div>
 
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 max-w-5xl mx-auto">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3 md:gap-4 max-w-5xl mx-auto">
           {BLOCKS.map((block, i) => (
             <motion.div
               key={block.id}

@@ -7,7 +7,8 @@ export default function Hero() {
   const [mouse, setMouse] = useState<{ x: number; y: number } | null>(null)
   return (
     <section
-      className="relative hero-bg text-center overflow-hidden"
+      id="overview"
+      className="relative hero-bg text-center overflow-hidden scroll-mt-24 md:scroll-mt-28"
       onMouseMove={(e) => {
         const t = e.currentTarget.getBoundingClientRect()
         setMouse({ x: e.clientX - t.left, y: e.clientY - t.top })
@@ -37,10 +38,10 @@ export default function Hero() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, delay: 0.16 }}
-          className="mt-10 flex items-center justify-center gap-3"
+          className="mt-10 flex flex-col md:flex-row items-center justify-center gap-3"
         >
-          <ButtonLink href="#get-started">Get started</ButtonLink>
-          <ButtonLink href="#docs" variant="secondary">Read the Docs</ButtonLink>
+          <ButtonLink href="/get-started" className="md:w-auto">Get started</ButtonLink>
+          <ButtonLink href="/docs" variant="secondary" className="md:w-auto">Read the Docs</ButtonLink>
         </motion.div>
 
       </div>

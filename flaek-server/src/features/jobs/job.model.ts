@@ -12,7 +12,7 @@ export type JobDocument = mongoose.Document & {
   error?: any;
   mxeProgramId?: string;
   computationOffset?: string;
-  enc?: { nonceB64: string; clientPubKeyB64: string; algo: 'rescue'|'aes128'|'aes192'|'aes256' };
+  enc?: { nonceB64: string; clientPubKeyB64: string; privIvB64?: string; wrappedPrivB64?: string; algo: 'rescue'|'aes128'|'aes192'|'aes256' };
   callbackUrl?: string;
   cost?: { compute_usd: number; chain_usd: number; credits_used: number };
   createdAt: Date;

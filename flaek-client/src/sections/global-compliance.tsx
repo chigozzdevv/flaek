@@ -22,7 +22,7 @@ const FEATURES = [
 
 export default function GlobalCompliance() {
   return (
-    <section className="section-demo relative overflow-hidden">
+    <section id="compliance" className="section-demo relative overflow-hidden scroll-mt-24 md:scroll-mt-28">
       <div className="container-outer pt-20 md:pt-32">
         <SectionDivider />
       </div>
@@ -37,7 +37,7 @@ export default function GlobalCompliance() {
             transition={{ duration: 0.6 }}
             className="relative order-2 lg:order-1 flex items-center"
           >
-            <div className="relative w-full rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-xl p-10 md:p-14 lg:p-16 overflow-hidden">
+            <div className="relative w-full rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.07] to-white/[0.02] backdrop-blur-xl p-6 md:p-14 lg:p-16 overflow-hidden">
               {/* Background glow */}
               <div className="absolute inset-0 bg-gradient-to-br from-brand-500/5 via-transparent to-purple-500/5" />
 

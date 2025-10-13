@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react'
 import BrandLogo from '../components/brand-logo'
 import ButtonLink from '../components/button'
+import { Menu, X } from 'lucide-react'
 
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
   const [navH, setNavH] = useState(80)
+  const [open, setOpen] = useState(false)
   const headerRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
@@ -33,6 +35,8 @@ export default function Navbar() {
     }
   }, [navH])
 
+  const close = () => setOpen(false)
+
   return (
     <header ref={headerRef}
       className={`sticky top-0 z-50 transition-colors ${
@@ -42,17 +46,44 @@ export default function Navbar() {
       <div className="container-outer h-16 flex items-center justify-between">
         <BrandLogo />
         <nav className="hidden md:flex items-center gap-7 text-sm text-white/80">
-          <a href="#product" className="hover:text-white">Product</a>
-          <a href="#pipelines" className="hover:text-white">Pipelines</a>
-          <a href="#attestations" className="hover:text-white">Attestations</a>
-          <a href="#pricing" className="hover:text-white">Pricing</a>
-          <a href="#docs" className="hover:text-white">Docs</a>
+          <a href="/#overview" className="hover:text-white">Overview</a>
+          <a href="/#how-it-works" className="hover:text-white">How it works</a>
+          <a href="/#blocks" className="hover:text-white">Blocks</a>
+          <a href="/#compliance" className="hover:text-white">Compliance</a>
+          <a href="/#learn-more" className="hover:text-white">Support</a>
+          <a href="/docs" className="hover:text-white">Docs</a>
         </nav>
         <div className="flex items-center gap-2">
-          <a href="#signin" className="hidden md:inline text-sm text-white/80 hover:text-white px-3 py-2">Sign in</a>
-          <ButtonLink href="#get-started" variant="secondary" className="">Get started</ButtonLink>
+          <a href="/signin" className="hidden md:inline text-sm text-white/80 hover:text-white px-3 py-2">Sign in</a>
+          <div className="hidden md:inline-flex">
+            <ButtonLink href="/get-started" variant="secondary">Get started</ButtonLink>
+          </div>
+          <button
+            type="button"
+            aria-label="Toggle menu"
+            aria-expanded={open}
+            onClick={() => setOpen(!open)}
+            className="md:hidden inline-flex items-center justify-center rounded-md px-3 py-2 text-white/80 hover:text-white"
+          >
+            {open ? <X size={20} /> : <Menu size={20} />}
+          </button>
         </div>
       </div>
+      {open && (
+        <div className="md:hidden absolute left-0 right-0 top-16 z-50 bg-bg-base/98 backdrop-blur border-t border-white/10">
+          <div className="container-outer py-4 flex flex-col gap-1 text-sm">
+            <a href="/#overview" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Overview</a>
+            <a href="/#how-it-works" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">How it works</a>
+            <a href="/#blocks" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Blocks</a>
+            <a href="/#compliance" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Compliance</a>
+            <a href="/#learn-more" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Support</a>
+            <a href="/docs" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Docs</a>
+            <div className="h-px my-2 bg-white/10" />
+            <a href="/signin" onClick={close} className="px-1 py-2 text-white/80 hover:text-white">Sign in</a>
+            <ButtonLink href="/get-started" className="mt-2 w-full justify-center">Get started</ButtonLink>
+          </div>
+        </div>
+      )}
     </header>
   )
 }

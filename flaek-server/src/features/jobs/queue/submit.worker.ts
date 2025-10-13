@@ -65,13 +65,21 @@ export function startSubmitWorker() {
       return;
     }
     const sdk = new ArciumClient();
-    const { tx, computationOffset, nonceB64, clientPubKeyB64 } = await sdk.submitQueue({
+    const { tx, computationOffset, nonceB64, clientPubKeyB64, clientPrivB64 } = await sdk.submitQueue({
       mxeProgramId: op.mxeProgramId,
       compDefOffset: (op as any).compDefOffset as number,
       accounts: op.accounts || {},
       payload: buffer,
     });
-    await jobRepository.setStatus(jobId, 'running', { arciumRef: tx, mxeProgramId: op.mxeProgramId, computationOffset, enc: { nonceB64, clientPubKeyB64, algo: 'rescue' } });
+  
+    const { wrapSecret } = await import('@/utils/secret-wrap')
+    const wrapped = wrapSecret(Buffer.from(clientPrivB64, 'base64'))
+    await jobRepository.setStatus(jobId, 'running', {
+      arciumRef: tx,
+      mxeProgramId: op.mxeProgramId,
+      computationOffset,
+      enc: { nonceB64, clientPubKeyB64, privIvB64: wrapped.ivB64, wrappedPrivB64: wrapped.cipherB64, algo: 'rescue' },
+    });
 
     const opts: JobsOptions = { removeOnComplete: 100, removeOnFail: 100, delay: 1000 };
     await queue.add('finalize', { jobId }, opts);

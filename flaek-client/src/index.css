@@ -18,6 +18,15 @@
   background-color: var(--color-bg-base);
 }
 
+html {
+  scrollbar-gutter: stable;
+  scroll-behavior: smooth;
+}
+
+body {
+  scrollbar-gutter: stable;
+}
+
 .hero-bg {
   position: relative;
   background:
@@ -110,5 +119,4 @@
 }
 @keyframes orbit-rotate { to { transform: translate(-50%, -50%) rotate(360deg); } }
 
-/* gentle breathing for depth */
 @keyframes orbit-breathe { 0%,100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.04); } }

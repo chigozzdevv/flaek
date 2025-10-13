@@ -14,18 +14,19 @@
     "arcium:upload": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/upload-circuit.ts",
     "arcium:finalize": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/finalize-compdef.ts",
     "arcium:list": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/list-mxes.ts"
-    
   },
   "dependencies": {
     "@arcium-hq/client": "^0.3.0",
     "@arcium-hq/reader": "^0.3.0",
     "@coral-xyz/anchor": "^0.31.1",
     "@solana/web3.js": "^1.98.4",
+    "@types/cors": "^2.8.19",
     "ajv": "^8.17.1",
     "axios": "^1.12.2",
     "bcryptjs": "^3.0.2",
     "bullmq": "^5.61.0",
     "cloudinary": "^2.7.0",
+    "cors": "^2.8.5",
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",

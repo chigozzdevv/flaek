@@ -5,12 +5,13 @@ import { JobModel } from '@/features/jobs/job.model';
 import { jobRepository } from '@/features/jobs/job.repository';
 import * as anchor from '@coral-xyz/anchor';
 import { Connection, Keypair, PublicKey } from '@solana/web3.js';
-import { awaitComputationFinalization, RescueCipher, x25519, getComputationAccAddress, deserializeLE } from '@arcium-hq/client';
+import { awaitComputationFinalization, RescueCipher, x25519, getComputationAccAddress, getArciumProgram } from '@arcium-hq/client';
+import { getComputationAccInfo } from '@arcium-hq/reader';
 import axios from 'axios';
 import { signHmac } from '@/utils/hmac';
 import { env } from '@/config/env';
 import { creditService } from '@/features/credits/credit.service';
-import * as crypto from 'crypto';
+import { unwrapSecret } from '@/utils/secret-wrap';
 
 export function startResultWorker() {
   const connection = getRedis();
@@ -39,83 +40,90 @@ export function startResultWorker() {
 
     let result: any = null;
 
-    if (job.enc) {
+    if (job.enc && job.enc.privIvB64 && job.enc.wrappedPrivB64) {
       try {
+        const clientPrivKey = unwrapSecret(job.enc.privIvB64, job.enc.wrappedPrivB64);
+        const mxePublicKeyBytes = Buffer.from(job.enc.clientPubKeyB64, 'base64');
+        const nonce = new Uint8Array(Buffer.from(job.enc.nonceB64, 'base64'));
+
+        const sharedSecret = x25519.getSharedSecret(clientPrivKey, mxePublicKeyBytes);
+        const cipher = new RescueCipher(sharedSecret);
+
         const compAcc = getComputationAccAddress(
           new PublicKey(job.mxeProgramId),
           new (anchor as any).BN(job.computationOffset)
         );
 
-        let encParts: Uint8Array[] | null = null;
-        // Try to use Arciu Reader if available
-        try {
-          const reader: any = await import('@arcium-hq/reader').catch(() => null)
-          if (reader) {
-            const candidates = ['readComputationResult', 'getComputationResult', 'fetchComputationResult', 'readResult']
-            for (const fn of candidates) {
-              if (typeof reader[fn] === 'function') {
-                const rr = await reader[fn](provider as any, new (anchor as any).BN(job.computationOffset), new PublicKey(job.mxeProgramId))
-                if (rr?.ct0 && rr?.ct1) {
-                  encParts = [new Uint8Array(rr.ct0), new Uint8Array(rr.ct1)]
-                } else if (Array.isArray(rr?.parts) && rr.parts.length >= 2) {
-                  encParts = [new Uint8Array(rr.parts[0]), new Uint8Array(rr.parts[1])]
-                } else if (rr instanceof Uint8Array || Buffer.isBuffer(rr)) {
-                  const buf = Buffer.from(rr as any)
-                  if (buf.length >= 32) encParts = [new Uint8Array(buf.slice(0, 16)), new Uint8Array(buf.slice(16, 32))]
+        const arciumProgram = getArciumProgram(provider as any);
+        const computationAccount = await getComputationAccInfo(arciumProgram, compAcc, 'confirmed');
+
+        if (computationAccount && computationAccount.output) {
+          const output = computationAccount.output as any;
+
+          // Normalize encrypted output into two 16-byte parts of number[] as expected by RescueCipher
+          let parts: number[][] | null = null;
+          // Common SDK shapes
+          if (output?.ct0 && output?.ct1) {
+            parts = [Array.from(new Uint8Array(output.ct0)), Array.from(new Uint8Array(output.ct1))];
+          } else if (Array.isArray(output?.parts) && output.parts.length >= 2) {
+            parts = [Array.from(new Uint8Array(output.parts[0])), Array.from(new Uint8Array(output.parts[1]))];
+          } else if (output?.encrypted && Array.isArray(output.encrypted)) {
+            const flat = new Uint8Array(output.encrypted.flat());
+            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
+          } else if (output?.encryptedU8 && Array.isArray(output.encryptedU8)) {
+            const flat = new Uint8Array(output.encryptedU8.flat());
+            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
+          } else if (Array.isArray(output)) {
+            const flat = new Uint8Array(output.flat());
+            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
+          }
+
+          if (parts) {
+            const decrypted = (cipher as any).decrypt(parts, nonce);
+
+            // Normalize decrypted into bytes
+            let outBytes: Uint8Array = new Uint8Array();
+            const toBytesFromBigint = (b: bigint, size = 16) => {
+              const hex = b.toString(16);
+              const padded = hex.padStart(size * 2, '0');
+              return new Uint8Array(Buffer.from(padded, 'hex'));
+            };
+            if (decrypted instanceof Uint8Array) {
+              outBytes = decrypted;
+            } else if (Array.isArray(decrypted)) {
+              if (decrypted.length && typeof decrypted[0] === 'number') {
+                outBytes = new Uint8Array(decrypted as number[]);
+              } else if (decrypted.length && typeof decrypted[0] === 'bigint') {
+                const chunks = (decrypted as bigint[]).map((bi) => toBytesFromBigint(bi));
+                outBytes = new Uint8Array(Buffer.concat(chunks.map((u) => Buffer.from(u))).values() as any);
+              } else if (Array.isArray(decrypted[0])) {
+                const flat = (decrypted as any[]).flat();
+                if (flat.length && typeof flat[0] === 'number') {
+                  outBytes = new Uint8Array(flat as number[]);
+                } else if (flat.length && typeof flat[0] === 'bigint') {
+                  const chunks = (flat as bigint[]).map((bi) => toBytesFromBigint(bi));
+                  outBytes = new Uint8Array(Buffer.concat(chunks.map((u) => Buffer.from(u))).values() as any);
                 }
-                break
               }
+            } else if (typeof decrypted === 'string') {
+              outBytes = new TextEncoder().encode(decrypted);
             }
-          }
-        } catch {}
 
-        if (!encParts) {
-          const accountInfo = await conn.getAccountInfo(compAcc);
-          if (accountInfo && accountInfo.data.length > 0) {
-            const data = accountInfo.data;
-            const outputOffset = 8 + 32 + 32 + 1 + 1;
-            if (data.length > outputOffset + 32) {
-              const encryptedOutput = data.slice(outputOffset, outputOffset + 32);
-              encParts = [new Uint8Array(encryptedOutput.slice(0, 16)), new Uint8Array(encryptedOutput.slice(16, 32))]
-            }
-          }
-        }
-
-            const clientPubKey = Buffer.from(job.enc.clientPubKeyB64, 'base64');
-            const nonce = Buffer.from(job.enc.nonceB64, 'base64');
-
-            // Unwrap the ephemeral private key used at submission time
-            const { unwrapSecret } = await import('@/utils/secret-wrap')
-            if (!job.enc.privIvB64 || !job.enc.wrappedPrivB64) throw new Error('missing_wrapped_priv')
-            const clientPrivKey = Buffer.from(unwrapSecret(job.enc.privIvB64, job.enc.wrappedPrivB64))
-
-            const sharedSecret = x25519.getSharedSecret(clientPrivKey, clientPubKey);
-            const cipher = new RescueCipher(sharedSecret);
-
-            const nonceBytes = new Uint8Array(nonce);
-            if (!encParts) throw new Error('missing_encrypted_output')
-            const decrypted = cipher.decrypt(encParts as any, nonceBytes) as any
-            // decrypted may be limbs or bytes depending on SDK; normalize to bytes
-            let outBytes: Buffer
-            if (Array.isArray(decrypted)) {
-              // assume array of Uint8Array
-              outBytes = Buffer.concat(decrypted.map((u: Uint8Array) => Buffer.from(u)))
-            } else if (decrypted instanceof Uint8Array) {
-              outBytes = Buffer.from(decrypted)
-            } else {
-              // fallback string
-              outBytes = Buffer.from(String(decrypted))
-            }
-            // Try parse JSON, else hex string
             try {
-              const parsed = JSON.parse(outBytes.toString('utf8'))
-              result = parsed
+              const str = Buffer.from(outBytes).toString('utf8').replace(/\0/g, '');
+              result = JSON.parse(str);
             } catch {
-              result = { bytes_hex: outBytes.toString('hex') }
+              try {
+                const num = Buffer.from(outBytes).readBigUInt64LE(0);
+                result = { value: Number(num), encrypted: false };
+              } catch {
+                result = { value: Buffer.from(outBytes).toString('hex'), encrypted: false };
+              }
             }
           }
         }
       } catch (err) {
+        console.error('Decryption failed:', err);
         result = { error: 'Failed to decrypt result', encrypted: true };
       }
     }
@@ -138,7 +146,7 @@ export function startResultWorker() {
     await jobRepository.setStatus(jobId, 'completed', { result, attestation, cost });
 
     if (job.callbackUrl) {
-      const payload = JSON.stringify({ job_id: job.id, status: 'completed', attestation });
+      const payload = JSON.stringify({ job_id: job.id, status: 'completed', attestation, result });
       const sig = signHmac(env.WEBHOOK_SECRET, payload);
       try {
         await axios.post(job.callbackUrl, payload, { headers: { 'content-type': 'application/json', 'x-flaek-signature': sig } });

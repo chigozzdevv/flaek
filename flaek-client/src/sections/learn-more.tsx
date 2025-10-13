@@ -98,7 +98,7 @@ export default function LearnMore() {
               {DOCS.map((d) => (
                 <motion.a
                   key={d.title}
-                  href="#docs"
+                  href="/docs"
                   variants={{ hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } } }}
                   className="group relative block rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-4 md:p-5 hover:border-white/20 transition-colors"
                 >
@@ -117,7 +117,7 @@ export default function LearnMore() {
                 </motion.a>
               ))}
             </div>
-            <a href="#docs" className="group mt-3 inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors">
+            <a href="/docs" className="group mt-3 inline-flex items-center gap-1.5 text-sm text-white/70 hover:text-white transition-colors">
               Go to docs
               <span className="inline-block transition-transform translate-x-0 group-hover:translate-x-1 group-hover:-translate-y-0.5 group-hover:-rotate-45">→</span>
             </a>

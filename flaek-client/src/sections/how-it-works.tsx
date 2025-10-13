@@ -3,7 +3,7 @@ import SectionDivider from '../components/section-divider'
 
 export default function HowItWorks() {
   return (
-    <section className="section-demo">
+    <section id="how-it-works" className="section-demo scroll-mt-24 md:scroll-mt-28">
       <div className="container-outer pt-20 md:pt-32">
         <SectionDivider />
       </div>
@@ -166,12 +166,12 @@ function FieldRow({
   required?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between py-2.5 px-3 rounded-lg bg-white/[0.03] border border-white/5">
-      <div className="flex items-center gap-2.5">
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-2.5 py-2.5 px-3 rounded-lg bg-white/[0.03] border border-white/5">
+      <div className="flex items-center gap-2.5 min-w-0">
         <span className="h-2 w-2 rounded-full bg-brand-500" />
-        <span className="text-sm text-white/85">{label}</span>
+        <span className="text-sm text-white/85 truncate">{label}</span>
       </div>
-      <div className="text-xs font-mono text-white/50 text-right">
+      <div className="text-[11px] sm:text-xs font-mono text-white/50 sm:text-right text-left whitespace-nowrap">
         <span>{type}</span>
         {required && <span className="ml-1.5">• required</span>}
       </div>

@@ -75,7 +75,7 @@ export class ArciumClient {
     return { tx, computationOffset: computationOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
   }
 
-  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; accounts?: Record<string, string> }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
+  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; accounts?: Record<string, string> }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string; clientPrivB64: string }> {
     const mxeProgramId = new PublicKey(input.mxeProgramId);
     const provider = this.provider;
     const arciumProgram = getArciumProgram(provider as any);
@@ -149,6 +149,6 @@ export class ArciumClient {
       })
       .rpc({ commitment: 'finalized' });
 
-    return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
+    return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64'), clientPrivB64: Buffer.from(priv).toString('base64') };
   }
 }
