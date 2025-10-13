@@ -41,8 +41,21 @@ export async function executePipeline(
       cost,
     });
   } catch (error: any) {
+    // Parse and structure the error message for better UX
+    let structuredError = error.message;
+    
+    // Try to extract block-level errors
+    const blockMatch = error.message?.match(/Failed to execute circuit '([^']+)': (.+)/);
+    if (blockMatch) {
+      structuredError = JSON.stringify({
+        title: `Block '${blockMatch[1]}' failed`,
+        details: blockMatch[2],
+        suggestion: 'Verify input values match the expected types and ranges for this block',
+      });
+    }
+    
     await jobRepository.setStatus(job.id, 'failed', { 
-      error: error.message,
+      error: structuredError,
     });
     throw error;
   }

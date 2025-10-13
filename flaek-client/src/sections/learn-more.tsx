@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
-import SectionDivider from '../components/section-divider'
-import { FileText, BookOpen, Newspaper } from 'lucide-react'
+import SectionDivider from '@/components/section-divider'
+import {BookOpen, Newspaper } from 'lucide-react'
 
 const BLOGS = [
   {

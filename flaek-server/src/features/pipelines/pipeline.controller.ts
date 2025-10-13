@@ -82,10 +82,49 @@ async function getTemplate(req: Request, res: Response) {
   return res.json({ template });
 }
 
+// Draft management (stored in-memory for now, could be moved to DB)
+const drafts = new Map<string, any>();
+
+async function getDraft(req: Request, res: Response) {
+  const tenantId = (req as any).tenant.id;
+  const draft = drafts.get(tenantId);
+  
+  return res.json({ draft: draft || null });
+}
+
+async function saveDraft(req: Request, res: Response) {
+  const tenantId = (req as any).tenant.id;
+  const { pipeline } = req.body;
+  
+  if (!pipeline) {
+    throw httpError(400, 'invalid_body', 'Pipeline is required');
+  }
+  
+  drafts.set(tenantId, {
+    pipeline,
+    updatedAt: new Date().toISOString(),
+  });
+  
+  return res.json({ 
+    success: true,
+    updatedAt: drafts.get(tenantId)?.updatedAt
+  });
+}
+
+async function deleteDraft(req: Request, res: Response) {
+  const tenantId = (req as any).tenant.id;
+  drafts.delete(tenantId);
+  
+  return res.json({ success: true });
+}
+
 export const pipelineController = {
   createOperation,
   execute,
   validate,
   getTemplates,
   getTemplate,
+  getDraft,
+  saveDraft,
+  deleteDraft,
 };

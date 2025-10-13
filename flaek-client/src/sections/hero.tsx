@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
-import ButtonLink from '../components/button'
-import BackgroundGrid from '../components/background-grid'
+import ButtonLink from '@/components/button'
+import BackgroundGrid from '@/components/background-grid'
 import { useState } from 'react'
 
 export default function Hero() {

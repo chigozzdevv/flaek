@@ -1,5 +1,11 @@
 import { Request, Response } from 'express';
 import { jobService } from '@/features/jobs/job.service';
+import { addSSEClient } from '@/features/jobs/job.sse';
+
+async function events(req: Request, res: Response) {
+  const tenantId = (req as any).tenantId as string;
+  addSSEClient(tenantId, res);
+}
 
 async function create(req: Request, res: Response) {
   const tenantId = (req as any).tenantId as string;
@@ -28,4 +34,4 @@ async function get(req: Request, res: Response) {
 
 function cancel(_req: Request, res: Response) { res.status(202).json({ job_id: 'job_x', status: 'cancelling' }); }
 
-export const jobController = { create, list, get, cancel };
+export const jobController = { events, create, list, get, cancel };

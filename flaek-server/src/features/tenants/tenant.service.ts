@@ -23,6 +23,8 @@ async function me(ownerUserId: string) {
     tenant_id: tenant.id,
     org_name: tenant.name,
     created_at: tenant.createdAt,
+    balance_cents: tenant.balanceCents || 0,
+    plan: tenant.plan || 'free',
     keys: tenant.apiKeys.map((k: any) => ({ key_id: k.keyId, name: k.name, created_at: k.createdAt, revoked_at: k.revokedAt })),
   };
 }

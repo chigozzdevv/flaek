@@ -6,7 +6,7 @@ import {
   BarChart3, TrendingUp, Minimize2, Maximize2, Activity,
   CreditCard, Heart, Vote, Target, Scale
 } from 'lucide-react'
-import SectionDivider from '../components/section-divider'
+import SectionDivider from '@/components/section-divider'
 
 const BLOCKS = [
   { id: 'add', name: 'Add', icon: Plus, category: 'math', color: '#3B82F6' },

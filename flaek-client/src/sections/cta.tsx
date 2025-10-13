@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion'
-import SectionDivider from '../components/section-divider'
-import ButtonLink from '../components/button'
+import SectionDivider from '@/components/section-divider'
+import ButtonLink from '@/components/button'
 
 export default function CTA() {
   return (

@@ -1,9 +1,9 @@
 import { Router } from 'express';
-import { apiKeyAuth } from '@/middlewares/api-key-auth';
+import { unifiedAuth } from '@/middlewares/unified-auth';
 import { attestationController } from '@/features/attestations/attestation.controller';
 
 const router = Router();
-router.use(apiKeyAuth);
+router.use(unifiedAuth);
 router.get('/:jobId', attestationController.get);
 router.post('/verify', attestationController.verify);
 

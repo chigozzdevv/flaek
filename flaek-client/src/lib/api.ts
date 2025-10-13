@@ -1,11 +1,20 @@
 const API_BASE = import.meta.env.VITE_API_BASE || ''
 
-type Json = Record<string, any>
+function getAuthHeaders(): Record<string, string> {
+  const token = localStorage.getItem('flaek_jwt')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 async function request(path: string, opts: RequestInit = {}) {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    ...getAuthHeaders(),
+    ...(opts.headers as Record<string, string> || {}),
+  }
+  
   const res = await fetch(`${API_BASE}${path}`, {
     method: 'GET',
-    headers: { 'Content-Type': 'application/json', ...(opts.headers || {}) },
+    headers,
     credentials: 'include',
     ...opts,
   })
@@ -18,6 +27,7 @@ async function request(path: string, opts: RequestInit = {}) {
   return body
 }
 
+// Auth
 export async function apiSignup(input: { name: string; email: string; password: string; confirmPassword: string; orgName?: string }) {
   return request('/auth/signup', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
     user_id: string; tenant_id?: string; totp: { secret_base32: string; otpauth_url: string }
@@ -30,5 +40,340 @@ export async function apiVerifyTotp(input: { email: string; code: string }) {
 
 export async function apiLogin(input: { email: string; password: string; code?: string }) {
   return request('/auth/login', { method: 'POST', body: JSON.stringify(input) }) as Promise<{ jwt: string }>
+}
+
+// Tenant
+export async function apiGetTenant() {
+  return request('/tenants/me') as Promise<{
+    tenant_id: string
+    org_name: string
+    created_at: string
+    keys: Array<{ key_id: string; name?: string; created_at: string; revoked_at?: string }>
+    balance_cents: number
+    plan: string
+  }>
+}
+
+export async function apiCreateApiKey(input: { name: string }) {
+  return request('/tenants/keys', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
+    api_key: string
+    key_id: string
+  }>
+}
+
+export async function apiCreatePublishableKey() {
+  return request('/tenants/publishable-keys', { method: 'POST' }) as Promise<{
+    publishable_key: string
+    tenant_public_key: string
+  }>
+}
+
+export async function apiRevokeApiKey(keyId: string) {
+  return request(`/tenants/keys/${keyId}/revoke`, { method: 'POST' })
+}
+
+export async function apiGetApiKeys() {
+  return request('/v1/keys') as Promise<{
+    items: Array<{
+      key_id: string
+      name: string
+      prefix: string
+      created_at: string
+      last_used?: string
+      status: 'active' | 'revoked'
+    }>
+  }>
+}
+
+// Datasets
+export async function apiGetDatasets() {
+  return request('/v1/datasets') as Promise<{
+    items: Array<{
+      dataset_id: string
+      name: string
+      created_at: string
+      status: 'active' | 'deprecated'
+      batch_count?: number
+    }>
+  }>
+}
+
+export async function apiGetDataset(id: string) {
+  return request(`/v1/datasets/${id}`) as Promise<{
+    dataset_id: string
+    name: string
+    schema: any
+    retention_days: number
+    created_at: string
+    status: string
+    batches: Array<any>
+  }>
+}
+
+export async function apiCreateDataset(input: { name: string; schema: any; retention_days?: number }) {
+  return request('/v1/datasets', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
+    dataset_id: string
+  }>
+}
+
+export async function apiDeprecateDataset(id: string) {
+  return request(`/v1/datasets/${id}/deprecate`, { method: 'POST' })
+}
+
+// Operations
+export async function apiGetOperations() {
+  return request('/v1/operations') as Promise<{
+    items: Array<{
+      operation_id: string
+      name: string
+      version: string
+      pipeline_hash: string
+      created_at: string
+      status: 'active' | 'deprecated'
+    }>
+  }>
+}
+
+export async function apiGetOperation(id: string) {
+  return request(`/v1/operations/${id}`) as Promise<{
+    operation_id: string
+    name: string
+    version: string
+    pipeline_spec: any
+    pipeline_hash: string
+    artifact_uri: string
+    runtime: string
+    inputs: string[]
+    outputs: string[]
+    status: string
+  }>
+}
+
+export async function apiCreateOperation(input: {
+  name: string
+  version: string
+  pipeline: any
+  mxeProgramId: string
+}) {
+  return request('/v1/pipelines/operations', { method: 'POST', body: JSON.stringify(input) }) as Promise<any>
+}
+
+export async function apiDeprecateOperation(id: string) {
+  return request(`/v1/operations/${id}/deprecate`, { method: 'POST' })
+}
+
+// Jobs
+export async function apiGetJobs(params?: { status?: string; limit?: number; cursor?: string }) {
+  const query = new URLSearchParams(params as any).toString()
+  return request(`/v1/jobs${query ? `?${query}` : ''}`) as Promise<{
+    items: Array<{
+      job_id: string
+      dataset_id: string
+      operation_id: string
+      status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled'
+      created_at: string
+      updated_at: string
+    }>
+    next_cursor?: string
+  }>
+}
+
+export async function apiGetJob(id: string) {
+  return request(`/v1/jobs/${id}`) as Promise<{
+    job_id: string
+    status: string
+    created_at: string
+    updated_at: string
+    result?: any
+    attestation?: {
+      provider: string
+      pipeline_hash: string
+      dataset_hash: string
+      signature: string
+      timestamp: string
+      chain_receipt?: any
+    }
+    cost?: {
+      compute_usd: number
+      chain_usd: number
+      credits_used: number
+    }
+  }>
+}
+
+export async function apiCreateJob(input: {
+  dataset_id: string
+  operation: string
+  parameters?: any
+  inputs?: Array<any>
+  result_format?: string
+  callback_url?: string
+}) {
+  return request('/v1/jobs', { 
+    method: 'POST', 
+    body: JSON.stringify(input),
+    headers: { 'Idempotency-Key': crypto.randomUUID() }
+  }) as Promise<{
+    job_id: string
+    status: string
+    eta_seconds: number
+  }>
+}
+
+export async function apiCancelJob(id: string) {
+  return request(`/v1/jobs/${id}/cancel`, { method: 'POST' }) as Promise<{
+    job_id: string
+    status: string
+  }>
+}
+
+// Blocks
+export async function apiGetBlocks() {
+  return request('/v1/blocks') as Promise<{
+    blocks: Array<{
+      id: string
+      name: string
+      category: string
+      description: string
+      circuit: string
+      inputs: Array<any>
+      outputs: Array<any>
+      icon?: string
+      color?: string
+      tags?: string[]
+    }>
+    total: number
+  }>
+}
+
+export async function apiGetBlock(id: string) {
+  return request(`/v1/blocks/${id}`)
+}
+
+export async function apiGetBlockCategories() {
+  return request('/v1/blocks/categories') as Promise<{
+    categories: Array<{ id: string; name: string; count: number }>
+  }>
+}
+
+// Pipelines
+export async function apiValidatePipeline(pipeline: any) {
+  return request('/v1/pipelines/validate', { method: 'POST', body: JSON.stringify({ pipeline }) }) as Promise<{
+    valid: boolean
+    errors: string[]
+    warnings: string[]
+    stats: any
+  }>
+}
+
+export async function apiTestPipeline(input: { pipeline: any; inputs: any }) {
+  return request('/v1/pipelines/test', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
+    outputs: any
+    steps: Array<any>
+    duration: number
+  }>
+}
+
+export async function apiGetPipelineTemplates() {
+  return request('/v1/pipelines/templates') as Promise<{
+    templates: Array<any>
+  }>
+}
+
+export async function apiGetPipelineDraft() {
+  return request('/v1/pipelines/draft') as Promise<{
+    draft: { pipeline: any; updatedAt: string } | null
+  }>
+}
+
+export async function apiSavePipelineDraft(pipeline: any) {
+  return request('/v1/pipelines/draft', { method: 'POST', body: JSON.stringify({ pipeline }) }) as Promise<{
+    success: boolean
+    updatedAt: string
+  }>
+}
+
+export async function apiDeletePipelineDraft() {
+  return request('/v1/pipelines/draft', { method: 'DELETE' }) as Promise<{
+    success: boolean
+  }>
+}
+
+// Webhooks
+export async function apiGetWebhooks() {
+  return request('/v1/webhooks') as Promise<{
+    items: Array<{
+      webhook_id: string
+      url: string
+      events: string[]
+      status: 'active' | 'disabled'
+      created_at: string
+      last_triggered?: string
+    }>
+  }>
+}
+
+export async function apiCreateWebhook(input: { url: string; events: string[] }) {
+  return request('/v1/webhooks', { method: 'POST', body: JSON.stringify(input) })
+}
+
+export async function apiDeleteWebhook(id: string) {
+  return request(`/v1/webhooks/${id}`, { method: 'DELETE' })
+}
+
+export async function apiTestWebhook(url: string) {
+  return request('/v1/webhooks/test', { method: 'POST', body: JSON.stringify({ url }) }) as Promise<{
+    delivered: boolean
+  }>
+}
+
+// Credits
+export async function apiGetCredits() {
+  return request('/v1/credits') as Promise<{
+    balance: number
+  }>
+}
+export async function apiGetCreditHistory() {
+  return request('/v1/credits/history') as Promise<{
+    items: Array<{
+      transaction_id: string
+      amount: number
+      type: 'purchase' | 'usage' | 'refund' | 'bonus'
+      description: string
+      balance_after: number
+      created_at: string
+    }>
+  }>
+}
+
+export async function apiTopUpCredits(amount_cents: number) {
+  return request('/v1/credits/topup', { method: 'POST', body: JSON.stringify({ amount_cents }) }) as Promise<{
+    balance_cents: number
+  }>
+}
+
+export async function apiGetCreditsLedger(params?: { limit?: number; cursor?: string }) {
+  const query = new URLSearchParams(params as any).toString()
+  return request(`/v1/credits/ledger${query ? `?${query}` : ''}`) as Promise<{
+    items: Array<{
+      id: string
+      delta_cents: number
+      reason: string
+      job_id?: string
+      created_at: string
+    }>
+    next_cursor?: string
+  }>
+}
+
+// Attestations
+export async function apiVerifyAttestation(input: { pipeline_hash: string; attestation: any }) {
+  return request('/v1/attestations/verify', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
+    valid: boolean
+  }>
+}
+
+export async function apiGetAttestation(jobId: string) {
+  return request(`/v1/attestations/${jobId}`)
 }
 

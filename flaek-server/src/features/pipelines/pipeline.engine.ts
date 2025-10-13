@@ -109,6 +109,7 @@ export class PipelineEngine {
           status: 'success',
         });
       } catch (error: any) {
+        const errorMessage = `Block '${block.name}' (${block.circuit}) failed: ${error.message}`;
         executionSteps.push({
           nodeId,
           blockId: node.blockId,
@@ -116,9 +117,14 @@ export class PipelineEngine {
           outputs: {},
           duration: Date.now() - stepStart,
           status: 'failed',
-          error: error.message,
+          error: errorMessage,
         });
-        throw error;
+        
+        // Throw with block context
+        const enhancedError = new Error(errorMessage);
+        (enhancedError as any).blockId = node.blockId;
+        (enhancedError as any).nodeId = nodeId;
+        throw enhancedError;
       }
     }
 

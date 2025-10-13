@@ -1,4 +1,5 @@
 import { JobModel } from '@/features/jobs/job.model';
+import { broadcastJobUpdate } from '@/features/jobs/job.sse';
 
 export const jobRepository = {
   async create(data: any) {
@@ -12,10 +13,22 @@ export const jobRepository = {
     return JobModel.find({ tenantId }).sort({ createdAt: -1 }).limit(limit).exec();
   },
   async setStatus(jobId: string, status: string, patch: any = {}) {
-    return JobModel.findByIdAndUpdate(jobId, { status, ...patch }, { new: true }).exec();
+    const job = await JobModel.findByIdAndUpdate(jobId, { status, ...patch }, { new: true }).exec();
+    
+    // Broadcast update via SSE
+    if (job) {
+      broadcastJobUpdate(job.tenantId, {
+        type: 'job.update',
+        job_id: job.id,
+        status: job.status,
+        updated_at: job.updatedAt,
+        ...patch,
+      });
+    }
+    
+    return job;
   },
   async setResult(jobId: string, result: any) {
     return JobModel.findByIdAndUpdate(jobId, { result }, { new: true }).exec();
   },
 };
-

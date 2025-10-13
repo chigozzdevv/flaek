@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion'
-import SectionDivider from '../components/section-divider'
+import SectionDivider from '@/components/section-divider'
 
 export default function HowItWorks() {
   return (

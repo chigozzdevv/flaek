@@ -1,13 +1,25 @@
-import { useState } from 'react'
-import { apiSignup, apiVerifyTotp, apiLogin } from '../lib/api'
-import BrandLogo from '../components/brand-logo'
+import { useState, useEffect } from 'react'
+import { apiSignup, apiVerifyTotp, apiLogin } from '@/lib/api'
+import BrandLogo from '@/components/brand-logo'
 import { ArrowLeft } from 'lucide-react'
-import { navigate } from '../lib/router'
+import { navigate } from '@/lib/router'
+import { isAuthenticated } from '@/lib/auth'
 
 type Mode = 'signup' | 'signin'
 
 export default function GetStartedPage({ mode: initialMode = 'signup' as Mode }) {
   const mode: Mode = initialMode
+  
+  useEffect(() => {
+    if (isAuthenticated()) {
+      navigate('/dashboard')
+    }
+  }, [])
+
+  if (isAuthenticated()) {
+    return null
+  }
+  
   return (
     <div className="min-h-dvh text-text-primary bg-bg-base overflow-x-hidden flex items-center justify-center py-12">
       <div className="w-full max-w-md mx-auto px-6">
@@ -66,7 +78,7 @@ function SignupForm() {
     try {
       const out = await apiVerifyTotp({ email, code })
       localStorage.setItem('flaek_jwt', out.jwt)
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } catch (err: any) {
       setError(err.message || 'Invalid code')
     } finally {
@@ -151,7 +163,7 @@ function SigninForm() {
     try {
       const out = await apiLogin({ email, password, code: code || undefined })
       localStorage.setItem('flaek_jwt', out.jwt)
-      window.location.href = '/'
+      window.location.href = '/dashboard'
     } catch (err: any) {
       setError(err.message || 'Login failed')
     } finally {

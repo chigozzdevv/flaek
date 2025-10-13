@@ -1,11 +1,12 @@
 import { Router } from 'express';
-import { apiKeyAuth } from '@/middlewares/api-key-auth';
+import { unifiedAuth } from '@/middlewares/unified-auth';
 import { jobController } from '@/features/jobs/job.controller';
 import { schemaValidator } from '@/middlewares/schema-validator';
 import { createJobSchema } from '@/features/jobs/job.validators';
 
 const router = Router();
-router.use(apiKeyAuth);
+router.use(unifiedAuth);
+router.get('/events', jobController.events); // SSE endpoint
 router.post('/', schemaValidator(createJobSchema), jobController.create);
 router.get('/', jobController.list);
 router.get('/:jobId', jobController.get);
