@@ -811,52 +811,33 @@ function CodeSnippetModal({ open, onClose, operation }: { open: boolean; onClose
 
   const datasetId = selectedDataset || 'YOUR_DATASET_ID'
 
-  const nodeSnippet = `// ==================================================
-// CONFIDENTIAL COMPUTING - CLIENT-SIDE ENCRYPTION
-// Your data is encrypted locally. Server never sees plaintext.
-// ==================================================
+  const installSnippet = `npm install @arcium-hq/client @solana/web3.js axios`
 
-// npm install @arcium-hq/client @solana/web3.js axios
+  const keyGenSnippet = `node -e "const { x25519 } = require('@arcium-hq/client'); const key = Buffer.from(x25519.utils.randomSecretKey()).toString('hex'); console.log('Your Encryption Key (save securely):'); console.log(key);"`
 
-const { x25519, RescueCipher, getMXEPublicKey, deserializeLE } = require('@arcium-hq/client');
+  const nodeSnippet = `const { x25519, RescueCipher, getMXEPublicKey, deserializeLE } = require('@arcium-hq/client');
 const { Connection, PublicKey } = require('@solana/web3.js');
 const axios = require('axios');
 const crypto = require('crypto');
 
-// -------------------
-// STEP 1: Key Management
-// Generate once, store securely in browser localStorage
-// -------------------
-let privateKey = localStorage.getItem('flaek_encryption_key');
-if (!privateKey) {
-  const newKey = x25519.utils.randomSecretKey();
-  privateKey = Buffer.from(newKey).toString('hex');
-  localStorage.setItem('flaek_encryption_key', privateKey);
-  console.log('🔐 New encryption key generated');
-}
+// Load your encryption key from step 2
+const privateKey = localStorage.getItem('flaek_encryption_key');
+if (!privateKey) throw new Error('Generate encryption key first (step 2)');
+
 const privKeyBytes = Buffer.from(privateKey, 'hex');
 const publicKey = x25519.getPublicKey(privKeyBytes);
 
-// -------------------
-// STEP 2: Connect to Arcium MXE
-// Get MXE public key and create shared secret
-// -------------------
 const connection = new Connection('https://api.devnet.solana.com');
 const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}');
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
 const cipher = new RescueCipher(sharedSecret);
 
-// -------------------
-// STEP 3: Encrypt Your Data
-// Data is encrypted on YOUR machine before sending
-// -------------------
 const nonce = crypto.randomBytes(16);
 const inputs = {
   ${operation.inputs?.map((i: string) => `${i}: 100`).join(',\n  ') || 'value: 100'}
 };
 
-// Convert inputs to BigInt limbs for encryption
 const limbs = Object.values(inputs).map(val => {
   const buf = Buffer.alloc(32);
   buf.writeBigUInt64LE(BigInt(val), 0);
@@ -865,10 +846,6 @@ const limbs = Object.values(inputs).map(val => {
 
 const [ct0, ct1] = cipher.encrypt(limbs, nonce);
 
-// -------------------
-// STEP 4: Submit Encrypted Job
-// Server processes encrypted data, never sees plaintext
-// -------------------
 const response = await axios.post('https://api.flaek.dev/v1/jobs', {
   dataset_id: '${datasetId}',
   operation: '${operation.operation_id}',
@@ -882,12 +859,8 @@ const response = await axios.post('https://api.flaek.dev/v1/jobs', {
   headers: { 'Authorization': 'Bearer YOUR_API_KEY' }
 });
 
-console.log('✅ Job submitted:', response.data.job_id);
+console.log('Job submitted:', response.data.job_id);
 
-// -------------------
-// STEP 5: Poll and Decrypt Results
-// Only YOU can decrypt with your private key
-// -------------------
 const pollInterval = setInterval(async () => {
   const job = await axios.get(
     \`https://api.flaek.dev/v1/jobs/\${response.data.job_id}\`,
@@ -896,124 +869,17 @@ const pollInterval = setInterval(async () => {
 
   if (job.data.status === 'completed') {
     clearInterval(pollInterval);
-
-    // Decrypt with YOUR private key
     const resultCipher = new RescueCipher(sharedSecret);
     const decrypted = resultCipher.decrypt(
       [new Uint8Array(job.data.result.ct0), new Uint8Array(job.data.result.ct1)],
       Buffer.from(job.data.result.nonce, 'base64')
     );
-
-    console.log('🎉 Decrypted result:', decrypted);
+    console.log('Result:', decrypted);
   } else if (job.data.status === 'failed') {
     clearInterval(pollInterval);
-    console.error('❌ Job failed:', job.data.error);
+    console.error('Job failed:', job.data.error);
   }
 }, 2000);`
-
-  const pythonSnippet = `# ==================================================
-# CONFIDENTIAL COMPUTING - CLIENT-SIDE ENCRYPTION
-# Your data is encrypted locally. Server never sees plaintext.
-# ==================================================
-
-# pip install arcium-client solana requests
-
-from arcium_client import x25519, RescueCipher, get_mxe_public_key, deserialize_le
-from solana.rpc.api import Client
-from solana.publickey import PublicKey
-import requests, secrets, json, time, os
-
-# -------------------
-# STEP 1: Key Management
-# Generate once, store securely in file
-# -------------------
-KEY_FILE = '.flaek_encryption_key'
-if os.path.exists(KEY_FILE):
-    with open(KEY_FILE, 'r') as f:
-        private_key = bytes.fromhex(f.read())
-else:
-    private_key = x25519.generate_secret_key()
-    with open(KEY_FILE, 'w') as f:
-        f.write(private_key.hex())
-    os.chmod(KEY_FILE, 0o600)  # Secure permissions
-    print('🔐 New encryption key generated')
-
-public_key = x25519.get_public_key(private_key)
-
-# -------------------
-# STEP 2: Connect to Arcium MXE
-# Get MXE public key and create shared secret
-# -------------------
-connection = Client("https://api.devnet.solana.com")
-mxe_program_id = PublicKey("${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}")
-mxe_public_key = get_mxe_public_key(connection, mxe_program_id)
-shared_secret = x25519.get_shared_secret(private_key, mxe_public_key)
-cipher = RescueCipher(shared_secret)
-
-# -------------------
-# STEP 3: Encrypt Your Data
-# Data is encrypted on YOUR machine before sending
-# -------------------
-nonce = secrets.token_bytes(16)
-inputs = {
-    ${operation.inputs?.map((i: string) => `'${i}': 100`).join(',\n    ') || "'value': 100"}
-}
-
-# Convert inputs to BigInt limbs for encryption
-limbs = []
-for val in inputs.values():
-    buf = bytearray(32)
-    buf[0:8] = int(val).to_bytes(8, 'little')
-    limbs.append(deserialize_le(buf))
-
-ct0, ct1 = cipher.encrypt(limbs, nonce)
-
-# -------------------
-# STEP 4: Submit Encrypted Job
-# Server processes encrypted data, never sees plaintext
-# -------------------
-response = requests.post(
-    'https://api.flaek.dev/v1/jobs',
-    headers={'Authorization': 'Bearer YOUR_API_KEY'},
-    json={
-        'dataset_id': '${datasetId}',
-        'operation': '${operation.operation_id}',
-        'encrypted_inputs': {
-            'ct0': list(ct0),
-            'ct1': list(ct1),
-            'client_public_key': list(public_key),
-            'nonce': nonce.hex()
-        }
-    }
-)
-
-job_id = response.json()['job_id']
-print(f'✅ Job submitted: {job_id}')
-
-# -------------------
-# STEP 5: Poll and Decrypt Results
-# Only YOU can decrypt with your private key
-# -------------------
-while True:
-    job = requests.get(
-        f'https://api.flaek.dev/v1/jobs/{job_id}',
-        headers={'Authorization': 'Bearer YOUR_API_KEY'}
-    ).json()
-
-    if job['status'] == 'completed':
-        # Decrypt with YOUR private key
-        result_cipher = RescueCipher(shared_secret)
-        decrypted = result_cipher.decrypt(
-            [bytes(job['result']['ct0']), bytes(job['result']['ct1'])],
-            bytes.fromhex(job['result']['nonce'])
-        )
-        print(f'🎉 Decrypted result: {decrypted}')
-        break
-    elif job['status'] == 'failed':
-        print(f'❌ Job failed: {job["error"]}')
-        break
-
-    time.sleep(2)`
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text)
@@ -1106,13 +972,56 @@ while True:
         <div>
           <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Code size={16} />
-            Integration Code
+            Integration Steps
           </h4>
 
           <div className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-white/70">Node.js / TypeScript</span>
+                <span className="text-xs font-semibold text-white/70">Step 1: Install Dependencies</span>
+                <button
+                  onClick={() => copyToClipboard(installSnippet, 'install')}
+                  className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
+                >
+                  {copied === 'install' ? <Check size={12} /> : <Copy size={12} />}
+                  {copied === 'install' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
+                <code>{installSnippet}</code>
+              </pre>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-white/70">Step 2: Generate Encryption Key</span>
+                <button
+                  onClick={() => copyToClipboard(keyGenSnippet, 'keygen')}
+                  className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
+                >
+                  {copied === 'keygen' ? <Check size={12} /> : <Copy size={12} />}
+                  {copied === 'keygen' ? 'Copied!' : 'Copy'}
+                </button>
+              </div>
+              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
+                <code>{keyGenSnippet}</code>
+              </pre>
+              <p className="text-xs text-amber-400 mt-1">Save the key in localStorage as 'flaek_encryption_key'</p>
+            </div>
+
+            <div>
+              <div className="mb-1">
+                <span className="text-xs font-semibold text-white/70">Step 3: Setup API Key & Webhook</span>
+              </div>
+              <div className="text-xs text-white/60 space-y-1 pl-3">
+                <div>→ <button onClick={() => navigate('/dashboard/keys')} className="text-brand-400 hover:text-brand-300">Create API key</button></div>
+                <div>→ <button onClick={() => navigate('/dashboard/webhooks')} className="text-brand-400 hover:text-brand-300">Setup webhook</button> (optional)</div>
+              </div>
+            </div>
+
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs font-semibold text-white/70">Step 4: Run Jobs</span>
                 <button
                   onClick={() => copyToClipboard(nodeSnippet, 'node')}
                   className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
@@ -1121,24 +1030,8 @@ while True:
                   {copied === 'node' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-96">
+              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-80">
                 <code>{nodeSnippet}</code>
-              </pre>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-white/70">Python</span>
-                <button
-                  onClick={() => copyToClipboard(pythonSnippet, 'python')}
-                  className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
-                >
-                  {copied === 'python' ? <Check size={12} /> : <Copy size={12} />}
-                  {copied === 'python' ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-96">
-                <code>{pythonSnippet}</code>
               </pre>
             </div>
           </div>

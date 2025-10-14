@@ -87,92 +87,66 @@ export function startResultWorker() {
 
     let result: any = null;
 
-    if (job.enc && job.enc.privIvB64 && job.enc.wrappedPrivB64) {
-      try {
-        const clientPrivKey = unwrapSecret(job.enc.privIvB64, job.enc.wrappedPrivB64);
-        const mxePublicKeyBytes = Buffer.from(job.enc.clientPubKeyB64, 'base64');
-        const nonce = new Uint8Array(Buffer.from(job.enc.nonceB64, 'base64'));
+    try {
+      const compAcc = getComputationAccAddress(
+        new PublicKey(job.mxeProgramId),
+        new (anchor as any).BN(job.computationOffset)
+      );
 
-        const sharedSecret = x25519.getSharedSecret(clientPrivKey, mxePublicKeyBytes);
-        const cipher = new RescueCipher(sharedSecret);
+      const arciumProgram = getArciumProgram(provider as any);
+      const computationAccount = await getComputationAccInfo(arciumProgram, compAcc, 'confirmed');
 
-        const compAcc = getComputationAccAddress(
-          new PublicKey(job.mxeProgramId),
-          new (anchor as any).BN(job.computationOffset)
-        );
+      if (computationAccount && computationAccount.output) {
+        const output = computationAccount.output as any;
 
-        const arciumProgram = getArciumProgram(provider as any);
-        const computationAccount = await getComputationAccInfo(arciumProgram, compAcc, 'confirmed');
+        console.log(`[Result Worker] Returning encrypted result for job ${jobId} (confidential computing)`);
 
-        if (computationAccount && computationAccount.output) {
-          const output = computationAccount.output as any;
+        let ct0: any = null;
+        let ct1: any = null;
 
-          // Normalize encrypted output into two 16-byte parts of number[] as expected by RescueCipher
-          let parts: number[][] | null = null;
-          // Common SDK shapes
-          if (output?.ct0 && output?.ct1) {
-            parts = [Array.from(new Uint8Array(output.ct0)), Array.from(new Uint8Array(output.ct1))];
-          } else if (Array.isArray(output?.parts) && output.parts.length >= 2) {
-            parts = [Array.from(new Uint8Array(output.parts[0])), Array.from(new Uint8Array(output.parts[1]))];
-          } else if (output?.encrypted && Array.isArray(output.encrypted)) {
-            const flat = new Uint8Array(output.encrypted.flat());
-            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
-          } else if (output?.encryptedU8 && Array.isArray(output.encryptedU8)) {
-            const flat = new Uint8Array(output.encryptedU8.flat());
-            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
-          } else if (Array.isArray(output)) {
-            const flat = new Uint8Array(output.flat());
-            if (flat.length >= 32) parts = [Array.from(flat.slice(0, 16)), Array.from(flat.slice(16, 32))];
+        if (output?.ct0 && output?.ct1) {
+          ct0 = Array.from(new Uint8Array(output.ct0));
+          ct1 = Array.from(new Uint8Array(output.ct1));
+        } else if (Array.isArray(output?.parts) && output.parts.length >= 2) {
+          ct0 = Array.from(new Uint8Array(output.parts[0]));
+          ct1 = Array.from(new Uint8Array(output.parts[1]));
+        } else if (output?.encrypted && Array.isArray(output.encrypted)) {
+          const flat = new Uint8Array(output.encrypted.flat());
+          if (flat.length >= 32) {
+            ct0 = Array.from(flat.slice(0, 16));
+            ct1 = Array.from(flat.slice(16, 32));
           }
-
-          if (parts) {
-            const decrypted = (cipher as any).decrypt(parts, nonce);
-
-            // Normalize decrypted into bytes
-            let outBytes: Uint8Array = new Uint8Array();
-            const toBytesFromBigint = (b: bigint, size = 16) => {
-              const hex = b.toString(16);
-              const padded = hex.padStart(size * 2, '0');
-              return new Uint8Array(Buffer.from(padded, 'hex'));
-            };
-            if (decrypted instanceof Uint8Array) {
-              outBytes = decrypted;
-            } else if (Array.isArray(decrypted)) {
-              if (decrypted.length && typeof decrypted[0] === 'number') {
-                outBytes = new Uint8Array(decrypted as number[]);
-              } else if (decrypted.length && typeof decrypted[0] === 'bigint') {
-                const chunks = (decrypted as bigint[]).map((bi) => toBytesFromBigint(bi));
-                outBytes = new Uint8Array(Buffer.concat(chunks.map((u) => Buffer.from(u))).values() as any);
-              } else if (Array.isArray(decrypted[0])) {
-                const flat = (decrypted as any[]).flat();
-                if (flat.length && typeof flat[0] === 'number') {
-                  outBytes = new Uint8Array(flat as number[]);
-                } else if (flat.length && typeof flat[0] === 'bigint') {
-                  const chunks = (flat as bigint[]).map((bi) => toBytesFromBigint(bi));
-                  outBytes = new Uint8Array(Buffer.concat(chunks.map((u) => Buffer.from(u))).values() as any);
-                }
-              }
-            } else if (typeof decrypted === 'string') {
-              outBytes = new TextEncoder().encode(decrypted);
-            }
-
-            try {
-              const str = Buffer.from(outBytes).toString('utf8').replace(/\0/g, '');
-              result = JSON.parse(str);
-            } catch {
-              try {
-                const num = Buffer.from(outBytes).readBigUInt64LE(0);
-                result = { value: Number(num), encrypted: false };
-              } catch {
-                result = { value: Buffer.from(outBytes).toString('hex'), encrypted: false };
-              }
-            }
+        } else if (output?.encryptedU8 && Array.isArray(output.encryptedU8)) {
+          const flat = new Uint8Array(output.encryptedU8.flat());
+          if (flat.length >= 32) {
+            ct0 = Array.from(flat.slice(0, 16));
+            ct1 = Array.from(flat.slice(16, 32));
+          }
+        } else if (Array.isArray(output)) {
+          const flat = new Uint8Array(output.flat());
+          if (flat.length >= 32) {
+            ct0 = Array.from(flat.slice(0, 16));
+            ct1 = Array.from(flat.slice(16, 32));
           }
         }
-      } catch (err) {
-        console.error('Decryption failed:', err);
-        result = { error: 'Failed to decrypt result', encrypted: true };
+
+        if (ct0 && ct1) {
+          result = {
+            encrypted: true,
+            ct0,
+            ct1,
+            nonce: job.enc?.nonceB64 || null,
+            mxe_public_key: job.enc?.clientPubKeyB64 || null
+          };
+        } else {
+          result = { error: 'Could not extract encrypted output from computation', encrypted: false };
+        }
+      } else {
+        result = { error: 'No output from computation', encrypted: false };
       }
+    } catch (err: any) {
+      console.error(`[Result Worker] Failed to fetch encrypted result for job ${jobId}:`, err.message);
+      result = { error: 'Failed to fetch result', details: err.message, encrypted: false };
     }
 
     const attestation = {

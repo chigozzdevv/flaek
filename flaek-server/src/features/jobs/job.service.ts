@@ -63,6 +63,26 @@ async function createInline(input: { tenantId: string; datasetId: string; operat
   return { job_id: job.id, status: job.status };
 }
 
+async function createWithEncryptedInputs(input: {
+  tenantId: string;
+  datasetId: string;
+  operationId: string;
+  encryptedInputs: any;
+  callbackUrl?: string
+}) {
+  await creditService.deduct(input.tenantId, 100, 'job_execution');
+  const job = await jobRepository.create({
+    tenantId: input.tenantId,
+    datasetId: input.datasetId,
+    operationId: input.operationId,
+    source: { type: 'encrypted', data: input.encryptedInputs },
+    callbackUrl: input.callbackUrl,
+    status: 'queued',
+  });
+  await enqueueSubmission(job.id);
+  return { job_id: job.id, status: job.status };
+}
+
 async function get(tenantId: string, jobId: string) {
   const job = await jobRepository.get(tenantId, jobId);
   if (!job) throw httpError(404, 'not_found', 'job_not_found');
@@ -122,4 +142,4 @@ async function cancel(tenantId: string, jobId: string) {
   return { job_id: jobId, status: 'cancelled' };
 }
 
-export const jobService = { createFromIngest, createInline, get, list, cancel };
+export const jobService = { createFromIngest, createInline, createWithEncryptedInputs, get, list, cancel };

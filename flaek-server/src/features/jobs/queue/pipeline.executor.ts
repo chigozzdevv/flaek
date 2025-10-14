@@ -7,10 +7,11 @@ import { creditService } from '@/features/credits/credit.service';
 export async function executePipeline(
   job: any,
   operation: OperationDocument,
-  inputData: any
+  inputData: any,
+  dataType: 'encrypted' | 'plaintext' = 'plaintext'
 ): Promise<void> {
-  console.log(`[Pipeline Executor] Starting execution for job ${job.id}`);
-  
+  console.log(`[Pipeline Executor] Starting execution for job ${job.id} with ${dataType} inputs`);
+
   if (!operation.pipelineSpec || operation.pipelineSpec.type !== 'visual_pipeline') {
     throw new Error('Operation is not a visual pipeline');
   }
@@ -24,13 +25,14 @@ export async function executePipeline(
   const pipeline = operation.pipelineSpec.pipeline as PipelineDefinition;
   console.log(`[Pipeline Executor] MXE Program ID: ${operation.mxeProgramId}`);
   console.log(`[Pipeline Executor] Pipeline nodes: ${pipeline.nodes.length}, edges: ${pipeline.edges.length}`);
-  
+
   const engine = new PipelineEngine(operation.mxeProgramId);
 
   try {
     console.log(`[Pipeline Executor] Executing pipeline...`);
     const result = await engine.execute(pipeline, inputData, {
       cluster: operation.accounts?.cluster,
+      clientEncrypted: dataType === 'encrypted'
     });
     console.log(`[Pipeline Executor] Pipeline executed successfully, ${result.steps.length} steps`);
 

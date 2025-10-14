@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { apiGetJobs, apiGetJob, apiCancelJob, apiCreateJob } from '@/lib/api'
 import { io, Socket } from 'socket.io-client'
+import { x25519, RescueCipher, getMXEPublicKey } from '@arcium-hq/client'
+import { Connection, PublicKey } from '@solana/web3.js'
 
 type Job = {
   job_id: string
@@ -35,6 +37,8 @@ export default function JobsPage() {
   const [showDetails, setShowDetails] = useState(false)
   const [socketConnected, setSocketConnected] = useState(false)
   const socketRef = useRef<Socket | null>(null)
+  const [decryptedResult, setDecryptedResult] = useState<any>(null)
+  const [decrypting, setDecrypting] = useState(false)
 
   useEffect(() => {
     loadJobs()
@@ -104,10 +108,61 @@ export default function JobsPage() {
     try {
       const data = await apiGetJob(id)
       setSelectedJob(data)
+      setDecryptedResult(null)
       setShowDetails(true)
     } catch (error) {
       console.error('Failed to load job:', error)
       alert('Failed to load job details')
+    }
+  }
+
+  async function decryptResult() {
+    if (!selectedJob?.result?.encrypted) {
+      alert('Result is not encrypted or already decrypted')
+      return
+    }
+
+    const encryptionKey = localStorage.getItem('flaek_encryption_key')
+    if (!encryptionKey) {
+      alert('Encryption key not found. Please generate a key in Run Job modal first.')
+      return
+    }
+
+    setDecrypting(true)
+    try {
+      const privKeyBytes = new Uint8Array(encryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
+      const publicKey = x25519.getPublicKey(privKeyBytes)
+
+      const connection = new Connection('https://api.devnet.solana.com')
+      const mxeProgramId = new PublicKey(selectedJob.result.mxe_public_key || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
+      const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
+      const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
+      const cipher = new RescueCipher(sharedSecret)
+
+      const nonce = selectedJob.result.nonce
+        ? new Uint8Array(Buffer.from(selectedJob.result.nonce, 'base64'))
+        : new Uint8Array(16)
+
+      const ct0 = new Uint8Array(selectedJob.result.ct0)
+      const ct1 = new Uint8Array(selectedJob.result.ct1)
+
+      const decrypted = cipher.decrypt([ct0, ct1], nonce)
+
+      let resultValue: any
+      if (typeof decrypted === 'bigint') {
+        resultValue = Number(decrypted)
+      } else if (Array.isArray(decrypted) && decrypted.length > 0 && typeof decrypted[0] === 'bigint') {
+        resultValue = decrypted.map(v => Number(v))
+      } else {
+        resultValue = decrypted
+      }
+
+      setDecryptedResult(resultValue)
+    } catch (error: any) {
+      console.error('Decryption failed:', error)
+      alert(`Failed to decrypt result: ${error.message}`)
+    } finally {
+      setDecrypting(false)
     }
   }
 
@@ -343,9 +398,40 @@ export default function JobsPage() {
             {selectedJob.result && (
               <div>
                 <label className="text-xs font-semibold text-white/70 mb-1 block">Result</label>
-                <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-48">
-                  {JSON.stringify(selectedJob.result, null, 2)}
-                </pre>
+                {selectedJob.result.encrypted ? (
+                  <div>
+                    <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg mb-2">
+                      <p className="text-xs text-blue-400">
+                        Result is encrypted. Decrypt with your key to view.
+                      </p>
+                    </div>
+                    {decryptedResult ? (
+                      <pre className="text-xs bg-green-500/5 p-3 rounded border border-green-500/20 overflow-x-auto max-h-48">
+                        {JSON.stringify(decryptedResult, null, 2)}
+                      </pre>
+                    ) : (
+                      <Button
+                        onClick={decryptResult}
+                        disabled={decrypting}
+                        variant="secondary"
+                        className="w-full"
+                      >
+                        {decrypting ? (
+                          <>
+                            <Loader2 size={14} className="animate-spin" />
+                            Decrypting...
+                          </>
+                        ) : (
+                          'Decrypt Result'
+                        )}
+                      </Button>
+                    )}
+                  </div>
+                ) : (
+                  <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-48">
+                    {JSON.stringify(selectedJob.result, null, 2)}
+                  </pre>
+                )}
               </div>
             )}
             {selectedJob.error && (

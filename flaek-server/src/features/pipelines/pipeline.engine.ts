@@ -51,6 +51,7 @@ export class PipelineEngine {
     options?: {
       cluster?: string;
       dryRun?: boolean;
+      clientEncrypted?: boolean;
     }
   ): Promise<ExecutionResult> {
     const startTime = Date.now();
@@ -63,14 +64,19 @@ export class PipelineEngine {
       decryptedInputs: new Map(Object.entries(inputs)),
     };
 
-    const inputNodes = pipeline.nodes.filter(n => n.type === 'input');
-    console.log(`[Pipeline Executor] Loading ${inputNodes.length} input nodes with data:`, inputs);
-    for (const inputNode of inputNodes) {
-      const fieldName = inputNode.data?.fieldName || inputNode.id;
-      if (inputs[fieldName] !== undefined) {
-        const key = `${inputNode.id}.value`;
-        console.log(`[Pipeline Executor] Setting ${key} = ${inputs[fieldName]}`);
-        context.values.set(key, inputs[fieldName]);
+    if (options?.clientEncrypted) {
+      console.log(`[Pipeline Executor] Using client-encrypted inputs`);
+      context.values.set('encrypted_inputs', inputs);
+    } else {
+      const inputNodes = pipeline.nodes.filter(n => n.type === 'input');
+      console.log(`[Pipeline Executor] Loading ${inputNodes.length} input nodes with data:`, inputs);
+      for (const inputNode of inputNodes) {
+        const fieldName = inputNode.data?.fieldName || inputNode.id;
+        if (inputs[fieldName] !== undefined) {
+          const key = `${inputNode.id}.value`;
+          console.log(`[Pipeline Executor] Setting ${key} = ${inputs[fieldName]}`);
+          context.values.set(key, inputs[fieldName]);
+        }
       }
     }
     
@@ -92,7 +98,8 @@ export class PipelineEngine {
       const nodeInputs = this.gatherNodeInputs(node, pipeline, context);
       const stepStart = Date.now();
       try {
-        const result = await this.executeBlock(block.circuit, nodeInputs, options);
+        const clientEncData = options?.clientEncrypted ? context.values.get('encrypted_inputs') : undefined;
+        const result = await this.executeBlock(block.circuit, nodeInputs, options, clientEncData);
 
         for (const [outputName, value] of Object.entries(result)) {
           context.values.set(`${nodeId}.${outputName}`, value);
@@ -153,22 +160,35 @@ export class PipelineEngine {
   private async executeBlock(
     circuit: string,
     inputs: Record<string, any>,
-    options?: { cluster?: string }
+    options?: { cluster?: string },
+    clientEncryptedData?: any
   ): Promise<Record<string, any>> {
     try {
-      console.log(`[Pipeline Executor] Executing circuit '${circuit}' with inputs:`, inputs);
+      console.log(`[Pipeline Executor] Executing circuit '${circuit}'`);
       const compDefOffset = getCircuitOffset(circuit);
-      
-      // Encode inputs as binary (u64 = 8 bytes little-endian)
-      const payload = this.encodeCircuitInputs(inputs);
-      console.log(`[Pipeline Executor] Encoded payload (${payload.length} bytes):`, payload.toString('hex'));
-      
+
+      let payload: Buffer;
+
+      if (clientEncryptedData) {
+        console.log(`[Pipeline Executor] Using client-encrypted data`);
+        const ct0 = Buffer.from(clientEncryptedData.ct0);
+        const ct1 = Buffer.from(clientEncryptedData.ct1);
+        payload = Buffer.concat([ct0, ct1]);
+        console.log(`[Pipeline Executor] Client-encrypted payload (${payload.length} bytes)`);
+      } else {
+        console.log(`[Pipeline Executor] Encoding inputs:`, inputs);
+        payload = this.encodeCircuitInputs(inputs);
+        console.log(`[Pipeline Executor] Encoded payload (${payload.length} bytes):`, payload.toString('hex'));
+      }
+
       const txInfo = await this.arciumClient.submitQueue({
         mxeProgramId: this.mxeProgramId.toBase58(),
         compDefOffset,
         circuit,
         accounts: options?.cluster ? { cluster: options.cluster } : {},
         payload,
+        clientPublicKey: clientEncryptedData ? Buffer.from(clientEncryptedData.client_public_key) : undefined,
+        clientNonce: clientEncryptedData ? Buffer.from(clientEncryptedData.nonce) : undefined,
       });
 
       console.log(`[Pipeline Executor] Circuit '${circuit}' submitted, tx: ${txInfo.tx}`);

@@ -3,14 +3,22 @@ import { jobService } from '@/features/jobs/job.service';
 
 async function create(req: Request, res: Response) {
   const tenantId = (req as any).tenantId as string;
-  const { dataset_id, operation, inputs } = req.body;
+  const { dataset_id, operation, encrypted_inputs } = req.body;
   const callbackUrl = req.body?.callback_url as string | undefined;
-  if (inputs && Array.isArray(inputs)) {
-    const out = await jobService.createInline({ tenantId, datasetId: dataset_id, operationId: operation, rows: inputs, callbackUrl });
-    res.status(202).json(out);
-  } else {
-    res.status(400).json({ code: 'invalid_body', message: 'inputs_required_for_inline_job_or_use_ingest_run' });
+
+  if (!encrypted_inputs) {
+    res.status(400).json({ code: 'invalid_body', message: 'encrypted_inputs_required' });
+    return;
   }
+
+  const out = await jobService.createWithEncryptedInputs({
+    tenantId,
+    datasetId: dataset_id,
+    operationId: operation,
+    encryptedInputs: encrypted_inputs,
+    callbackUrl
+  });
+  res.status(202).json(out);
 }
 
 async function list(req: Request, res: Response) {

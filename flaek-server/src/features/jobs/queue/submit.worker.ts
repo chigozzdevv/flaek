@@ -47,7 +47,12 @@ export function startSubmitWorker() {
     }
 
     let buffer: Buffer | null = null;
-    if (job.source.type === 'ephemeral') {
+    let clientEncryptedData: any = null;
+
+    if (job.source.type === 'encrypted') {
+      clientEncryptedData = job.source.data;
+      console.log(`[Submit Worker] Using client-encrypted data for job ${jobId}`);
+    } else if (job.source.type === 'ephemeral') {
       buffer = await getEphemeral(job.source.ref);
       await delEphemeral(job.source.ref).catch(() => {});
     } else if (job.source.type === 'retained') {
@@ -68,16 +73,17 @@ export function startSubmitWorker() {
     } else if (job.source.type === 'inline') {
       buffer = Buffer.from(job.source.rows.map((r: any) => JSON.stringify(r)).join('\n'), 'utf8');
     }
-    if (!buffer) {
-      console.error(`[Submit Worker] No buffer for job ${jobId}, source type: ${job.source.type}`);
+
+    if (!buffer && !clientEncryptedData) {
+      console.error(`[Submit Worker] No buffer or encrypted data for job ${jobId}, source type: ${job.source.type}`);
       await jobRepository.setStatus(jobId, 'failed', { error: 'missing_payload' });
       return;
     }
 
     if (op.pipelineSpec?.type === 'visual_pipeline') {
       console.log(`[Submit Worker] Job ${jobId} is a visual pipeline, executing...`);
-      const inputData = buffer ? JSON.parse(buffer.toString()) : {};
-      await executePipeline(job, op, inputData);
+      const inputData = clientEncryptedData || (buffer ? JSON.parse(buffer.toString()) : {});
+      await executePipeline(job, op, inputData, clientEncryptedData ? 'encrypted' : 'plaintext');
       console.log(`[Submit Worker] Visual pipeline execution completed for job ${jobId}`);
       return;
     }

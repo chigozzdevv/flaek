@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { navigate } from '@/lib/router'
 import { apiGetOperations, apiGetOperation, apiDeprecateOperation, apiCreateJob, apiGetDatasets, apiUpdateOperation } from '@/lib/api'
+import { x25519, RescueCipher, getMXEPublicKey, deserializeLE } from '@arcium-hq/client'
+import { Connection, PublicKey } from '@solana/web3.js'
 
 type Operation = {
   operation_id: string
@@ -288,11 +290,11 @@ function RunJobModal({ operation, open, onClose }: { operation: any; open: boole
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [useRealData, setUseRealData] = useState(false)
+  const [encryptionKey, setEncryptionKey] = useState('')
 
   useEffect(() => {
     if (open) {
       loadDatasets()
-      // Initialize inputs with empty values
       const initialInputs: Record<string, any> = {}
       if (operation.inputs) {
         operation.inputs.forEach((input: string) => {
@@ -300,8 +302,21 @@ function RunJobModal({ operation, open, onClose }: { operation: any; open: boole
         })
       }
       setInputs(initialInputs)
+
+      const savedKey = localStorage.getItem('flaek_encryption_key')
+      if (savedKey) {
+        setEncryptionKey(savedKey)
+      }
     }
   }, [open, operation])
+
+  function generateEncryptionKey() {
+    const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('')
+    setEncryptionKey(randomHex)
+    localStorage.setItem('flaek_encryption_key', randomHex)
+  }
 
   async function loadDatasets() {
     try {
@@ -314,23 +329,50 @@ function RunJobModal({ operation, open, onClose }: { operation: any; open: boole
 
   async function handleRun() {
     setError('')
-    
+
+    if (!encryptionKey) {
+      setError('Please generate or provide an encryption key')
+      return
+    }
+
     if (useRealData && !selectedDataset) {
       setError('Please select a dataset')
       return
     }
 
-    // Validate inputs
-    const inputArray = [{ ...inputs }]
-    
     setLoading(true)
     try {
+      const privKeyBytes = new Uint8Array(encryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
+      const publicKey = x25519.getPublicKey(privKeyBytes)
+
+      const connection = new Connection('https://api.devnet.solana.com')
+      const mxeProgramId = new PublicKey(operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
+      const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
+      const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
+      const cipher = new RescueCipher(sharedSecret)
+
+      const nonce = crypto.getRandomValues(new Uint8Array(16))
+
+      const limbs = Object.values(inputs).map(val => {
+        const buf = new ArrayBuffer(32)
+        const view = new DataView(buf)
+        view.setBigUint64(0, BigInt(val), true)
+        return deserializeLE(new Uint8Array(buf))
+      })
+
+      const [ct0, ct1] = cipher.encrypt(limbs, nonce)
+
       const result = await apiCreateJob({
         dataset_id: selectedDataset || 'test-dataset',
         operation: operation.operation_id,
-        inputs: inputArray,
+        encrypted_inputs: {
+          ct0: Array.from(ct0),
+          ct1: Array.from(ct1),
+          client_public_key: Array.from(publicKey),
+          nonce: Array.from(nonce)
+        }
       })
-      
+
       alert(`Job created successfully! ID: ${result.job_id}`)
       navigate('/dashboard/jobs')
       onClose()
@@ -348,6 +390,27 @@ function RunJobModal({ operation, open, onClose }: { operation: any; open: boole
           <div className="text-xs text-white/50 mb-1">Operation</div>
           <div className="font-medium">{operation.name}</div>
           <div className="text-xs text-white/60 mt-1">v{operation.version}</div>
+        </div>
+
+        <div>
+          <label className="text-xs font-semibold text-white/70 mb-2 block">Encryption Key</label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={encryptionKey}
+              onChange={(e) => setEncryptionKey(e.target.value)}
+              placeholder="Generate or paste your encryption key"
+              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-brand-500/50 font-mono"
+            />
+            <Button
+              variant="secondary"
+              onClick={generateEncryptionKey}
+              className="text-xs"
+            >
+              Generate
+            </Button>
+          </div>
+          <p className="text-xs text-white/50 mt-1">Used for client-side encryption/decryption</p>
         </div>
 
         <div>
