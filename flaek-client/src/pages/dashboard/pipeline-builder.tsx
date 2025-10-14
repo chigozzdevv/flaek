@@ -32,7 +32,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { navigate } from '@/lib/router'
-import { apiGetBlocks, apiCreateOperation, apiGetPipelineDraft, apiSavePipelineDraft, apiDeletePipelineDraft, apiTestPipeline } from '@/lib/api'
+import { apiGetBlocks, apiCreateOperation, apiGetPipelineDraft, apiSavePipelineDraft, apiDeletePipelineDraft, apiTestPipeline, apiGetDatasets } from '@/lib/api'
 
 type BlockDef = {
   id: string
@@ -787,53 +787,233 @@ export default function PipelineBuilderPage() {
 function CodeSnippetModal({ open, onClose, operation }: { open: boolean; onClose: () => void; operation: any }) {
   const [copied, setCopied] = useState<string | null>(null)
   const [needsSetup, setNeedsSetup] = useState(true)
+  const [datasets, setDatasets] = useState<any[]>([])
+  const [selectedDataset, setSelectedDataset] = useState<string>('')
+  const [loadingDatasets, setLoadingDatasets] = useState(true)
 
-  const curlSnippet = `curl -X POST https://api.flaek.dev/v1/jobs \\
-  -H "Authorization: Bearer YOUR_API_KEY" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "dataset_id": "YOUR_DATASET_ID",
-    "operation": "${operation.operation_id}",
-    "inputs": [{
-      ${operation.inputs?.map((i: string) => `"${i}": "value"`).join(',\n      ') || ''}
-    }]
-  }'`
+  useEffect(() => {
+    loadDatasets()
+  }, [])
 
-  const nodeSnippet = `const axios = require('axios');
-
-const response = await axios.post('https://api.flaek.dev/v1/jobs', {
-  dataset_id: 'YOUR_DATASET_ID',
-  operation: '${operation.operation_id}',
-  inputs: [{
-    ${operation.inputs?.map((i: string) => `${i}: 'value'`).join(',\n    ') || ''}
-  }]
-}, {
-  headers: {
-    'Authorization': 'Bearer YOUR_API_KEY',
-    'Content-Type': 'application/json'
+  async function loadDatasets() {
+    try {
+      const data = await apiGetDatasets()
+      setDatasets(data.items || [])
+      if (data.items && data.items.length > 0) {
+        setSelectedDataset(data.items[0].dataset_id)
+      }
+    } catch (err) {
+      console.error('Failed to load datasets:', err)
+    } finally {
+      setLoadingDatasets(false)
+    }
   }
+
+  const datasetId = selectedDataset || 'YOUR_DATASET_ID'
+
+  const nodeSnippet = `// ==================================================
+// CONFIDENTIAL COMPUTING - CLIENT-SIDE ENCRYPTION
+// Your data is encrypted locally. Server never sees plaintext.
+// ==================================================
+
+// npm install @arcium-hq/client @solana/web3.js axios
+
+const { x25519, RescueCipher, getMXEPublicKey, deserializeLE } = require('@arcium-hq/client');
+const { Connection, PublicKey } = require('@solana/web3.js');
+const axios = require('axios');
+const crypto = require('crypto');
+
+// -------------------
+// STEP 1: Key Management
+// Generate once, store securely in browser localStorage
+// -------------------
+let privateKey = localStorage.getItem('flaek_encryption_key');
+if (!privateKey) {
+  const newKey = x25519.utils.randomSecretKey();
+  privateKey = Buffer.from(newKey).toString('hex');
+  localStorage.setItem('flaek_encryption_key', privateKey);
+  console.log('🔐 New encryption key generated');
+}
+const privKeyBytes = Buffer.from(privateKey, 'hex');
+const publicKey = x25519.getPublicKey(privKeyBytes);
+
+// -------------------
+// STEP 2: Connect to Arcium MXE
+// Get MXE public key and create shared secret
+// -------------------
+const connection = new Connection('https://api.devnet.solana.com');
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}');
+const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
+const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
+const cipher = new RescueCipher(sharedSecret);
+
+// -------------------
+// STEP 3: Encrypt Your Data
+// Data is encrypted on YOUR machine before sending
+// -------------------
+const nonce = crypto.randomBytes(16);
+const inputs = {
+  ${operation.inputs?.map((i: string) => `${i}: 100`).join(',\n  ') || 'value: 100'}
+};
+
+// Convert inputs to BigInt limbs for encryption
+const limbs = Object.values(inputs).map(val => {
+  const buf = Buffer.alloc(32);
+  buf.writeBigUInt64LE(BigInt(val), 0);
+  return deserializeLE(buf);
 });
 
-console.log('Job ID:', response.data.job_id);`
+const [ct0, ct1] = cipher.encrypt(limbs, nonce);
 
-  const pythonSnippet = `import requests
+// -------------------
+// STEP 4: Submit Encrypted Job
+// Server processes encrypted data, never sees plaintext
+// -------------------
+const response = await axios.post('https://api.flaek.dev/v1/jobs', {
+  dataset_id: '${datasetId}',
+  operation: '${operation.operation_id}',
+  encrypted_inputs: {
+    ct0: Array.from(ct0),
+    ct1: Array.from(ct1),
+    client_public_key: Array.from(publicKey),
+    nonce: Buffer.from(nonce).toString('base64')
+  }
+}, {
+  headers: { 'Authorization': 'Bearer YOUR_API_KEY' }
+});
 
+console.log('✅ Job submitted:', response.data.job_id);
+
+// -------------------
+// STEP 5: Poll and Decrypt Results
+// Only YOU can decrypt with your private key
+// -------------------
+const pollInterval = setInterval(async () => {
+  const job = await axios.get(
+    \`https://api.flaek.dev/v1/jobs/\${response.data.job_id}\`,
+    { headers: { 'Authorization': 'Bearer YOUR_API_KEY' } }
+  );
+
+  if (job.data.status === 'completed') {
+    clearInterval(pollInterval);
+
+    // Decrypt with YOUR private key
+    const resultCipher = new RescueCipher(sharedSecret);
+    const decrypted = resultCipher.decrypt(
+      [new Uint8Array(job.data.result.ct0), new Uint8Array(job.data.result.ct1)],
+      Buffer.from(job.data.result.nonce, 'base64')
+    );
+
+    console.log('🎉 Decrypted result:', decrypted);
+  } else if (job.data.status === 'failed') {
+    clearInterval(pollInterval);
+    console.error('❌ Job failed:', job.data.error);
+  }
+}, 2000);`
+
+  const pythonSnippet = `# ==================================================
+# CONFIDENTIAL COMPUTING - CLIENT-SIDE ENCRYPTION
+# Your data is encrypted locally. Server never sees plaintext.
+# ==================================================
+
+# pip install arcium-client solana requests
+
+from arcium_client import x25519, RescueCipher, get_mxe_public_key, deserialize_le
+from solana.rpc.api import Client
+from solana.publickey import PublicKey
+import requests, secrets, json, time, os
+
+# -------------------
+# STEP 1: Key Management
+# Generate once, store securely in file
+# -------------------
+KEY_FILE = '.flaek_encryption_key'
+if os.path.exists(KEY_FILE):
+    with open(KEY_FILE, 'r') as f:
+        private_key = bytes.fromhex(f.read())
+else:
+    private_key = x25519.generate_secret_key()
+    with open(KEY_FILE, 'w') as f:
+        f.write(private_key.hex())
+    os.chmod(KEY_FILE, 0o600)  # Secure permissions
+    print('🔐 New encryption key generated')
+
+public_key = x25519.get_public_key(private_key)
+
+# -------------------
+# STEP 2: Connect to Arcium MXE
+# Get MXE public key and create shared secret
+# -------------------
+connection = Client("https://api.devnet.solana.com")
+mxe_program_id = PublicKey("${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}")
+mxe_public_key = get_mxe_public_key(connection, mxe_program_id)
+shared_secret = x25519.get_shared_secret(private_key, mxe_public_key)
+cipher = RescueCipher(shared_secret)
+
+# -------------------
+# STEP 3: Encrypt Your Data
+# Data is encrypted on YOUR machine before sending
+# -------------------
+nonce = secrets.token_bytes(16)
+inputs = {
+    ${operation.inputs?.map((i: string) => `'${i}': 100`).join(',\n    ') || "'value': 100"}
+}
+
+# Convert inputs to BigInt limbs for encryption
+limbs = []
+for val in inputs.values():
+    buf = bytearray(32)
+    buf[0:8] = int(val).to_bytes(8, 'little')
+    limbs.append(deserialize_le(buf))
+
+ct0, ct1 = cipher.encrypt(limbs, nonce)
+
+# -------------------
+# STEP 4: Submit Encrypted Job
+# Server processes encrypted data, never sees plaintext
+# -------------------
 response = requests.post(
     'https://api.flaek.dev/v1/jobs',
-    headers={
-        'Authorization': 'Bearer YOUR_API_KEY',
-        'Content-Type': 'application/json'
-    },
+    headers={'Authorization': 'Bearer YOUR_API_KEY'},
     json={
-        'dataset_id': 'YOUR_DATASET_ID',
+        'dataset_id': '${datasetId}',
         'operation': '${operation.operation_id}',
-        'inputs': [{
-            ${operation.inputs?.map((i: string) => `'${i}': 'value'`).join(',\n            ') || ''}
-        }]
+        'encrypted_inputs': {
+            'ct0': list(ct0),
+            'ct1': list(ct1),
+            'client_public_key': list(public_key),
+            'nonce': nonce.hex()
+        }
     }
 )
 
-print('Job ID:', response.json()['job_id'])`
+job_id = response.json()['job_id']
+print(f'✅ Job submitted: {job_id}')
+
+# -------------------
+# STEP 5: Poll and Decrypt Results
+# Only YOU can decrypt with your private key
+# -------------------
+while True:
+    job = requests.get(
+        f'https://api.flaek.dev/v1/jobs/{job_id}',
+        headers={'Authorization': 'Bearer YOUR_API_KEY'}
+    ).json()
+
+    if job['status'] == 'completed':
+        # Decrypt with YOUR private key
+        result_cipher = RescueCipher(shared_secret)
+        decrypted = result_cipher.decrypt(
+            [bytes(job['result']['ct0']), bytes(job['result']['ct1'])],
+            bytes.fromhex(job['result']['nonce'])
+        )
+        print(f'🎉 Decrypted result: {decrypted}')
+        break
+    elif job['status'] == 'failed':
+        print(f'❌ Job failed: {job["error"]}')
+        break
+
+    time.sleep(2)`
 
   const copyToClipboard = (text: string, type: string) => {
     navigator.clipboard.writeText(text)
@@ -854,6 +1034,12 @@ print('Job ID:', response.json()['job_id'])`
           </p>
           <p className="text-xs text-white/50 mt-1 font-mono">
             ID: {operation.operation_id}
+          </p>
+        </div>
+
+        <div className="p-3 bg-blue-500/5 border border-blue-500/20 rounded-lg">
+          <p className="text-xs text-blue-400 mb-2">
+            <strong>🔐 Confidential Computing:</strong> Your data is encrypted locally before sending. The server never sees your plaintext data.
           </p>
         </div>
 
@@ -889,31 +1075,44 @@ print('Job ID:', response.json()['job_id'])`
         )}
 
         <div>
+          <label className="text-xs font-semibold text-white/70 mb-2 block">Select Dataset</label>
+          {loadingDatasets ? (
+            <div className="flex items-center gap-2 text-xs text-white/50">
+              <Loader2 size={14} className="animate-spin" />
+              Loading datasets...
+            </div>
+          ) : datasets.length === 0 ? (
+            <div className="p-3 bg-white/5 rounded-lg border border-white/10 text-xs text-white/50">
+              No datasets found.{' '}
+              <button onClick={() => navigate('/dashboard/datasets')} className="text-brand-400 hover:text-brand-300">
+                Create one
+              </button>
+            </div>
+          ) : (
+            <select
+              value={selectedDataset}
+              onChange={(e) => setSelectedDataset(e.target.value)}
+              className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-brand-500/50"
+            >
+              {datasets.map((ds) => (
+                <option key={ds.dataset_id} value={ds.dataset_id}>
+                  {ds.name} ({ds.dataset_id.slice(0, 8)}...)
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+
+        <div>
           <h4 className="text-sm font-semibold mb-3 flex items-center gap-2">
             <Code size={16} />
-            Usage Examples
+            Integration Code
           </h4>
 
           <div className="space-y-3">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-white/70">cURL</span>
-                <button
-                  onClick={() => copyToClipboard(curlSnippet, 'curl')}
-                  className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
-                >
-                  {copied === 'curl' ? <Check size={12} /> : <Copy size={12} />}
-                  {copied === 'curl' ? 'Copied!' : 'Copy'}
-                </button>
-              </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
-                <code>{curlSnippet}</code>
-              </pre>
-            </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-semibold text-white/70">Node.js</span>
+                <span className="text-xs font-semibold text-white/70">Node.js / TypeScript</span>
                 <button
                   onClick={() => copyToClipboard(nodeSnippet, 'node')}
                   className="text-xs flex items-center gap-1 text-brand-400 hover:text-brand-300"
@@ -922,7 +1121,7 @@ print('Job ID:', response.json()['job_id'])`
                   {copied === 'node' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
+              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-96">
                 <code>{nodeSnippet}</code>
               </pre>
             </div>
@@ -938,7 +1137,7 @@ print('Job ID:', response.json()['job_id'])`
                   {copied === 'python' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
+              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-96">
                 <code>{pythonSnippet}</code>
               </pre>
             </div>

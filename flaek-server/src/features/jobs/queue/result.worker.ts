@@ -16,18 +16,40 @@ import { unwrapSecret } from '@/utils/secret-wrap';
 export function startResultWorker() {
   const connection = getRedis();
   const worker = new Worker(JOB_QUEUE, async (bullJob) => {
-    if (bullJob.name !== 'finalize') return;
-    const { jobId } = bullJob.data as { jobId: string };
-    const job = await JobModel.findById(jobId).exec();
-    if (!job) return;
-    
-    // Check if job was cancelled
-    if (job.status === 'cancelled') {
-      console.log(`Job ${jobId} was cancelled, skipping finalization`);
+    if (bullJob.name !== 'finalize') {
+      console.log(`[Result Worker] Wrong job type: ${bullJob.name} (ID: ${bullJob.id}) - requeueing`);
+      await bullJob.moveToDelayed(Date.now() + 100, bullJob.token!);
       return;
     }
-    
-    if (!job.mxeProgramId || !job.computationOffset) return;
+
+    const { jobId } = bullJob.data as { jobId: string };
+    console.log(`[Result Worker] Processing finalization for job: ${jobId} (BullMQ ID: ${bullJob.id})`);
+
+    const job = await JobModel.findById(jobId).exec();
+    if (!job) {
+      console.error(`[Result Worker] Job not found in DB: ${jobId}`);
+      return;
+    }
+
+    // Check if job was cancelled
+    if (job.status === 'cancelled') {
+      console.log(`[Result Worker] Job ${jobId} was cancelled, skipping finalization`);
+      return;
+    }
+
+    if (!job.mxeProgramId || !job.computationOffset) {
+      console.error(`[Result Worker] Missing Arcium data for job ${jobId}:`, {
+        hasMxeProgramId: !!job.mxeProgramId,
+        hasComputationOffset: !!job.computationOffset
+      });
+      await jobRepository.setStatus(jobId, 'failed', {
+        error: 'missing_arcium_data',
+        details: 'Job missing mxeProgramId or computationOffset'
+      });
+      return;
+    }
+
+    console.log(`[Result Worker] Awaiting computation finalization for job ${jobId}...`);
 
     const rpc = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
     const conn = new Connection(rpc, 'confirmed');
@@ -38,12 +60,30 @@ export function startResultWorker() {
     const provider = new anchor.AnchorProvider(conn, wallet, { commitment: 'confirmed' });
     anchor.setProvider(provider);
 
-    const finalizeSig = await awaitComputationFinalization(
-      provider as any,
-      new (anchor as any).BN(job.computationOffset),
-      new (anchor.web3 as any).PublicKey(job.mxeProgramId),
-      'finalized'
-    );
+    let finalizeSig: string;
+    try {
+      const FINALIZATION_TIMEOUT = 5 * 60 * 1000; // 5 minutes
+      finalizeSig = await Promise.race([
+        awaitComputationFinalization(
+          provider as any,
+          new (anchor as any).BN(job.computationOffset),
+          new (anchor.web3 as any).PublicKey(job.mxeProgramId),
+          'finalized'
+        ),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('Computation finalization timeout after 5 minutes')),
+          FINALIZATION_TIMEOUT)
+        )
+      ]);
+      console.log(`[Result Worker] Computation finalized for job ${jobId}, sig: ${finalizeSig}`);
+    } catch (error: any) {
+      console.error(`[Result Worker] Finalization failed for job ${jobId}:`, error.message);
+      await jobRepository.setStatus(jobId, 'failed', {
+        error: 'finalization_failed',
+        details: error.message
+      });
+      throw error; // Re-throw to let BullMQ handle retries
+    }
 
     let result: any = null;
 
@@ -159,7 +199,23 @@ export function startResultWorker() {
         await axios.post(job.callbackUrl, payload, { headers: { 'content-type': 'application/json', 'x-flaek-signature': sig } });
       } catch {}
     }
-  }, { connection });
+  }, {
+    connection,
+    concurrency: 3, // Process up to 3 finalization jobs in parallel
+    limiter: {
+      max: 5, // Max 5 jobs
+      duration: 1000 // Per second
+    }
+  });
+
+  // Add error handler
+  worker.on('failed', (job, err) => {
+    console.error(`[Result Worker] Job ${job?.id} failed after all retries:`, err.message);
+  });
+
+  worker.on('error', (err) => {
+    console.error('[Result Worker] Worker error:', err.message);
+  });
 
   return worker;
 }

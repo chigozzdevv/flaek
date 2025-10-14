@@ -1,16 +1,8 @@
-import { newId } from '@/utils/id';
 import { jobRepository } from '@/features/jobs/job.repository';
 import { Queue, QueueEvents, JobsOptions } from 'bullmq';
 import { getRedis } from '@/db/redis';
-import { JOB_QUEUE } from '@/features/jobs/queue/job.queue';
+import { JOB_QUEUE, SUBMIT_JOB_NAME } from '@/features/jobs/queue/job.queue';
 import { httpError } from '@/shared/errors';
-import { getEphemeral, delEphemeral } from '@/features/ingest/ephemeral.store';
-import axios from 'axios';
-import { ArciumClient } from '@/clients/arcium-client';
-import { sha256Hex } from '@/utils/hash';
-import { operationRepository } from '@/features/operations/operation.repository';
-import { DatasetModel } from '@/features/datasets/dataset.model';
-import { JobModel } from '@/features/jobs/job.model';
 import { creditService } from '@/features/credits/credit.service';
 
 type IngestSource =
@@ -26,14 +18,22 @@ type CreateFromIngestInput = {
 };
 
 const connection = getRedis();
-const queue = new Queue(JOB_QUEUE, { connection });
+const submitQueue = new Queue(JOB_QUEUE, { connection });
 const queueEvents = new QueueEvents(JOB_QUEUE, { connection });
 
 async function enqueueSubmission(jobId: string) {
-  const opts: JobsOptions = { removeOnComplete: 100, removeOnFail: 100 };
+  const opts: JobsOptions = {
+    removeOnComplete: 100,
+    removeOnFail: 100,
+    attempts: 3,
+    backoff: {
+      type: 'exponential',
+      delay: 2000 
+    }
+  };
   console.log(`[Job Service] Enqueuing job: ${jobId}`);
-  const bullJob = await queue.add('submit', { jobId }, opts);
-  console.log(`[Job Service] Job enqueued with BullMQ ID: ${bullJob.id}`);
+  const bullJob = await submitQueue.add(SUBMIT_JOB_NAME, { jobId }, opts);
+  console.log(`[Job Service] Job enqueued in submit queue with BullMQ ID: ${bullJob.id}`);
 }
 
 async function createFromIngest(input: CreateFromIngestInput) {
@@ -68,9 +68,12 @@ async function get(tenantId: string, jobId: string) {
   if (!job) throw httpError(404, 'not_found', 'job_not_found');
   return {
     job_id: job.id,
+    dataset_id: job.datasetId,
+    operation_id: job.operationId,
     status: job.status,
     result: job.result,
     attestation: job.attestation,
+    arcium_tx: job.arciumRef,
     cost: job.cost,
     created_at: job.createdAt,
     updated_at: job.updatedAt,
@@ -106,15 +109,14 @@ async function cancel(tenantId: string, jobId: string) {
   
   // Try to remove from queue if it's still queued
   try {
-    const bullQueue = queue;
-    const jobs = await bullQueue.getJobs(['waiting', 'active', 'delayed']);
+    const jobs = await submitQueue.getJobs(['waiting', 'active', 'delayed']);
     for (const bullJob of jobs) {
       if (bullJob.data.jobId === jobId) {
         await bullJob.remove();
       }
     }
   } catch (err) {
-    console.error('Failed to remove job from queue:', err);
+    console.error('Failed to remove job from submit queue:', err);
   }
   
   return { job_id: jobId, status: 'cancelled' };

@@ -163,7 +163,7 @@ export class PipelineEngine {
       const payload = this.encodeCircuitInputs(inputs);
       console.log(`[Pipeline Executor] Encoded payload (${payload.length} bytes):`, payload.toString('hex'));
       
-      const result = await this.arciumClient.submitQueue({
+      const txInfo = await this.arciumClient.submitQueue({
         mxeProgramId: this.mxeProgramId.toBase58(),
         compDefOffset,
         circuit,
@@ -171,7 +171,13 @@ export class PipelineEngine {
         payload,
       });
 
-      return result || { result: 0 };
+      console.log(`[Pipeline Executor] Circuit '${circuit}' submitted, tx: ${txInfo.tx}`);
+
+      return {
+        tx: txInfo.tx,
+        computationOffset: txInfo.computationOffset,
+        status: 'submitted'
+      };
     } catch (error: any) {
       throw new Error(`Failed to execute circuit '${circuit}': ${error.message}`);
     }

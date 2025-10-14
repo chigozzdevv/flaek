@@ -324,6 +324,22 @@ export default function JobsPage() {
                 <div className="text-xs">{new Date(selectedJob.updated_at).toLocaleString()}</div>
               </div>
             </div>
+            {selectedJob.arcium_tx && (
+              <div>
+                <label className="text-xs font-semibold text-white/70 mb-1 block">Solana Transaction</label>
+                <a
+                  href={`https://explorer.solana.com/tx/${selectedJob.arcium_tx}?cluster=devnet`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-xs font-mono bg-white/5 p-2 rounded border border-white/10 break-all hover:bg-white/10 transition flex items-center gap-2 text-brand-400 hover:text-brand-300"
+                >
+                  {selectedJob.arcium_tx}
+                  <svg className="w-3 h-3 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                  </svg>
+                </a>
+              </div>
+            )}
             {selectedJob.result && (
               <div>
                 <label className="text-xs font-semibold text-white/70 mb-1 block">Result</label>

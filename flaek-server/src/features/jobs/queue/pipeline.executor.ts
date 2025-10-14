@@ -15,7 +15,6 @@ export async function executePipeline(
     throw new Error('Operation is not a visual pipeline');
   }
 
-  // Check if job was cancelled before execution
   const currentJob = await JobModel.findById(job.id).exec();
   if (currentJob?.status === 'cancelled') {
     console.log(`Job ${job.id} was cancelled during pipeline execution`);
@@ -35,11 +34,15 @@ export async function executePipeline(
     });
     console.log(`[Pipeline Executor] Pipeline executed successfully, ${result.steps.length} steps`);
 
+    const firstStepWithTx = result.steps.find(s => s.outputs?.tx);
+    const arciumTx = firstStepWithTx?.outputs?.tx;
+
     const attestation = {
       provider: 'arcium',
       pipeline_execution: true,
       steps: result.steps.length,
       status: 'completed',
+      tx: arciumTx,
     };
 
     const cost = {
@@ -49,9 +52,10 @@ export async function executePipeline(
     };
 
     await creditService.deduct(job.tenantId, result.steps.length, 'pipeline_computation', job.id);
-    await jobRepository.setStatus(job.id, 'completed', { 
+    await jobRepository.setStatus(job.id, 'completed', {
       result: result.outputs,
       attestation,
+      arciumRef: arciumTx,
       cost,
     });
   } catch (error: any) {
