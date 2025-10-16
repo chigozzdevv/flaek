@@ -10,7 +10,7 @@ function httpError(status: number, code: string, message: string) {
 
 async function createOperation(req: Request, res: Response) {
   const tenantId = (req as any).tenant.id;
-  const { name, version, pipeline, mxeProgramId } = req.body;
+  const { name, version, pipeline, mxeProgramId, datasetId } = req.body;
 
   if (!name || !version || !pipeline || !mxeProgramId) {
     throw httpError(400, 'invalid_body', 'Missing required fields');
@@ -19,7 +19,7 @@ async function createOperation(req: Request, res: Response) {
   const operation = await pipelineService.createOperationFromPipeline(
     tenantId,
     pipeline,
-    { name, version, mxeProgramId }
+    { name, version, mxeProgramId, datasetId }
   );
 
   return res.status(201).json(operation);

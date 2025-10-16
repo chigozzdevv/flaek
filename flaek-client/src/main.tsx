@@ -9,6 +9,7 @@ import OverviewPage from '@/pages/dashboard/overview'
 import DatasetsPage from '@/pages/dashboard/datasets'
 import PipelineBuilderPage from '@/pages/dashboard/pipeline-builder'
 import OperationsPage from '@/pages/dashboard/operations'
+import PlaygroundPage from '@/pages/dashboard/playground'
 import JobsPage from '@/pages/dashboard/jobs'
 import BlocksPage from '@/pages/dashboard/blocks'
 import ApiKeysPage from '@/pages/dashboard/api-keys'
@@ -38,6 +39,7 @@ function Router() {
         {path === '/dashboard/datasets' && <DatasetsPage />}
         {path === '/dashboard/pipelines' && <PipelineBuilderPage />}
         {path === '/dashboard/operations' && <OperationsPage />}
+        {path === '/dashboard/playground' && <PlaygroundPage />}
         {path === '/dashboard/jobs' && <JobsPage />}
         {path === '/dashboard/blocks' && <BlocksPage />}
         {path === '/dashboard/keys' && <ApiKeysPage />}

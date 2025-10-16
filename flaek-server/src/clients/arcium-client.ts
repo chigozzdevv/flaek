@@ -16,7 +16,7 @@ export class ArciumClient {
   private provider: anchor.AnchorProvider;
 
   constructor() {
-    const rpc = process.env.SOLANA_RPC_URL || 'https://api.mainnet-beta.solana.com';
+    const rpc = process.env.SOLANA_RPC_URL || 'https://api.devnet.solana.com';
     const connection = new Connection(rpc, 'confirmed');
     const secret = process.env.ARCIUM_SOLANA_SECRET_KEY;
     if (!secret) throw new Error('ARCIUM_SOLANA_SECRET_KEY not set');
@@ -75,7 +75,7 @@ export class ArciumClient {
     return { tx, computationOffset: computationOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
   }
 
-  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; circuit: string; accounts?: Record<string, string>; clientPublicKey?: Buffer; clientNonce?: Buffer }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string; clientPrivB64: string }> {
+  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; circuit: string; accounts?: Record<string, string>; clientPublicKey: Buffer; clientNonce: Buffer }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
     try {
       console.log('[Arcium Client] submitQueue called with:', {
         mxeProgramId: input.mxeProgramId,
@@ -134,75 +134,23 @@ export class ArciumClient {
     }
     console.log('[Arcium Client] MXE public key retrieved successfully');
 
-    let priv: Uint8Array;
-    let pub: Uint8Array;
-    let nonce: Buffer;
-    let ct0: any, ct1: any;
-
-    if (input.clientPublicKey && input.clientNonce) {
-      console.log('[Arcium Client] Using client-provided encryption (confidential computing mode)');
-      pub = new Uint8Array(input.clientPublicKey);
-      nonce = input.clientNonce;
-      priv = new Uint8Array(32);
-
-      const bytes = new Uint8Array(input.payload);
-      if (bytes.length < 64) {
-        throw new Error('Client-encrypted payload too short (expected at least 64 bytes for ct0+ct1)');
-      }
-      ct0 = bytes.slice(0, bytes.length / 2);
-      ct1 = bytes.slice(bytes.length / 2);
-      console.log('[Arcium Client] Client-encrypted ct0/ct1 extracted');
-    } else {
-      console.log('[Arcium Client] Using server-side encryption (legacy mode)');
-      priv = x25519.utils.randomSecretKey();
-      pub = x25519.getPublicKey(priv);
-      const shared = x25519.getSharedSecret(priv, mxePublicKey);
-      const cipher = new RescueCipher(shared);
-      nonce = crypto.randomBytes(16);
-
-      const bytes = new Uint8Array(input.payload);
-      console.log('[Arcium Client] Payload bytes length:', bytes.length);
-
-      const limbs: bigint[] = [];
-      for (let i = 0; i < bytes.length; i += 32) {
-        const slice = bytes.slice(i, Math.min(i + 32, bytes.length));
-        const padded = new Uint8Array(32);
-        padded.set(slice, 0);
-        limbs.push(deserializeLE(padded));
-      }
-
-      console.log('[Arcium Client] Limbs to encrypt:', limbs.length, 'limbs');
-      console.log('[Arcium Client] Nonce:', nonce.length, 'bytes');
-
-      if (limbs.length === 0) {
-        throw new Error('No limbs to encrypt - payload is empty');
-      }
-
-      const ct = cipher.encrypt(limbs, nonce);
-      console.log('[Arcium Client] Ciphertext result type:', typeof ct);
-      console.log('[Arcium Client] Ciphertext result:', ct);
-
-      if (Array.isArray(ct) && ct.length >= 2) {
-        ct0 = ct[0];
-        ct1 = ct[1];
-      } else if (ct && typeof ct === 'object' && 'ct0' in ct && 'ct1' in ct) {
-        ct0 = (ct as any).ct0;
-        ct1 = (ct as any).ct1;
-      } else if (ct && typeof ct === 'object' && 'parts' in ct) {
-        const parts = (ct as any).parts;
-        if (Array.isArray(parts) && parts.length >= 2) {
-          ct0 = parts[0];
-          ct1 = parts[1];
-        }
-      }
-
-      if (!ct0 || !ct1) {
-        throw new Error(`Encryption failed: could not extract ciphertext parts. Got: ${JSON.stringify(ct)}`);
-      }
-
-      console.log('[Arcium Client] Extracted ct0:', ct0);
-      console.log('[Arcium Client] Extracted ct1:', ct1);
+    // Confidential computing: client MUST provide encrypted data
+    if (!input.clientPublicKey || !input.clientNonce) {
+      throw new Error('Client-side encryption is required for confidential computing. clientPublicKey and clientNonce are mandatory.');
     }
+
+    console.log('[Arcium Client] Using client-provided encryption (confidential computing mode)');
+    const pub = new Uint8Array(input.clientPublicKey);
+    const nonce = input.clientNonce;
+
+    const bytes = new Uint8Array(input.payload);
+    if (bytes.length < 64) {
+      throw new Error('Client-encrypted payload too short (expected at least 64 bytes for ct0+ct1)');
+    }
+    
+    const ct0 = bytes.slice(0, bytes.length / 2);
+    const ct1 = bytes.slice(bytes.length / 2);
+    console.log('[Arcium Client] Client-encrypted ct0/ct1 extracted');
 
     const compOffset = new (anchor as any).BN(crypto.randomBytes(8).toString('hex'), 16);
     const compAcc = getComputationAccAddress(mxeProgramId, compOffset);
@@ -264,7 +212,7 @@ export class ArciumClient {
           commitment: 'confirmed'
         });
 
-      return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64'), clientPrivB64: Buffer.from(priv).toString('base64') };
+      return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
     } catch (error: any) {
       console.error('[Arcium Client] Method call failed:', error.message);
       console.error('[Arcium Client] Error stack:', error.stack);

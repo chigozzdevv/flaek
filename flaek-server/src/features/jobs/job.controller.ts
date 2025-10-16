@@ -23,7 +23,28 @@ async function create(req: Request, res: Response) {
 
 async function list(req: Request, res: Response) {
   const tenantId = (req as any).tenantId as string;
-  const out = await jobService.list(tenantId);
+  const limitRaw = (req.query.limit as string) || undefined;
+  const cursor = (req.query.cursor as string) || undefined;
+  const sinceRaw = (req.query.since as string) || undefined;
+
+  let limit: number | undefined = undefined;
+  if (limitRaw) {
+    const n = parseInt(limitRaw, 10);
+    if (!isNaN(n) && n > 0) {
+      // cap limit to prevent abuse
+      limit = Math.min(n, 200);
+    }
+  }
+
+  let since: Date | undefined = undefined;
+  if (sinceRaw) {
+    const d = new Date(sinceRaw);
+    if (!isNaN(d.getTime())) {
+      since = d;
+    }
+  }
+
+  const out = await jobService.list(tenantId, { limit, cursor, since });
   res.json(out);
 }
 

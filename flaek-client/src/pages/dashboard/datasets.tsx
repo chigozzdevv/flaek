@@ -150,12 +150,6 @@ function DatasetCard({ dataset, onUpdate }: { dataset: any; onUpdate: () => void
               <span>{fieldCount} fields</span>
               <span>•</span>
               <span>Created {new Date(dataset.created_at).toLocaleDateString()}</span>
-              {dataset.batch_count > 0 && (
-                <>
-                  <span>•</span>
-                  <span>{dataset.batch_count} batches</span>
-                </>
-              )}
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -244,20 +238,10 @@ function DatasetDetailsModal({ dataset, open, onClose }: { dataset: any; open: b
             <span className="ml-2 font-medium">{dataset.status}</span>
           </div>
           <div>
-            <span className="text-white/50">Retention:</span>
-            <span className="ml-2 font-medium">
-              {dataset.retention_days || 0} days {dataset.retention_days === 0 && '(forever)'}
-            </span>
-          </div>
-          <div>
             <span className="text-white/50">Created:</span>
             <span className="ml-2 font-medium">
               {new Date(dataset.created_at).toLocaleDateString()}
             </span>
-          </div>
-          <div>
-            <span className="text-white/50">Batches:</span>
-            <span className="ml-2 font-medium">{dataset.batches?.length || 0}</span>
           </div>
         </div>
 
@@ -295,7 +279,6 @@ function CreateDatasetModal({ open, onClose, onSuccess }: {
   onSuccess: () => void
 }) {
   const [name, setName] = useState('')
-  const [retentionDays, setRetentionDays] = useState(30)
   const [fields, setFields] = useState<Field[]>([
     { id: '1', name: '', type: 'u64', required: true }
   ])
@@ -350,8 +333,7 @@ function CreateDatasetModal({ open, onClose, onSuccess }: {
     try {
       await apiCreateDataset({
         name: name.trim(),
-        schema,
-        retention_days: retentionDays
+        schema
       })
       onSuccess()
     } catch (err: any) {
@@ -375,15 +357,6 @@ function CreateDatasetModal({ open, onClose, onSuccess }: {
           value={name}
           onChange={(e) => setName(e.target.value)}
           required
-        />
-
-        <Input
-          label="Retention Days"
-          type="number"
-          value={retentionDays}
-          onChange={(e) => setRetentionDays(parseInt(e.target.value) || 0)}
-          helper="Number of days to retain ingested data (0 = forever)"
-          min="0"
         />
 
         <div>

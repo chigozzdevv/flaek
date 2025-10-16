@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react'
 import { Loader2, DollarSign, TrendingUp, TrendingDown } from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { apiGetCredits, apiGetCreditHistory } from '@/lib/api'
+import { apiGetCredits, apiGetCreditsLedger } from '@/lib/api'
 
 type CreditHistory = {
   transaction_id: string
@@ -24,12 +24,36 @@ export default function CreditsPage() {
 
   async function loadData() {
     try {
-      const [creditsData, historyData] = await Promise.all([
+      const [creditsData, ledger] = await Promise.all([
         apiGetCredits(),
-        apiGetCreditHistory()
+        apiGetCreditsLedger({ limit: 50 })
       ])
       setBalance(creditsData.balance)
-      setHistory(historyData.items)
+      // Compute running balance for display from newest to oldest
+      let running = creditsData.balance
+      const items = ledger.items.map((i) => {
+        const delta = (i.delta_cents || 0) / 100
+        const reason = i.reason || ''
+        const type: CreditHistory['type'] = delta >= 0
+          ? (reason === 'topup' ? 'purchase' : 'bonus')
+          : 'usage'
+        const description = reason === 'topup'
+          ? 'Top-up'
+          : reason === 'job_execution'
+            ? (i.job_id ? `Job execution (${i.job_id})` : 'Job execution')
+            : reason || 'Adjustment'
+        const tx: CreditHistory = {
+          transaction_id: i.id,
+          amount: delta,
+          type,
+          description,
+          balance_after: running,
+          created_at: i.created_at,
+        }
+        running -= delta
+        return tx
+      })
+      setHistory(items)
     } catch (error) {
       console.error('Failed to load credits:', error)
     } finally {

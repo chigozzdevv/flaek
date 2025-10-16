@@ -73,7 +73,7 @@ export async function apiRevokeApiKey(keyId: string) {
 }
 
 export async function apiGetApiKeys() {
-  return request('/v1/keys') as Promise<{
+  return request('/tenants/keys') as Promise<{
     items: Array<{
       key_id: string
       name: string
@@ -112,13 +112,13 @@ export async function apiGetDataset(id: string) {
   }>
 }
 
-export async function apiCreateDataset(input: { name: string; schema: any; retention_days?: number }) {
+export async function apiCreateDataset(input: { name: string; schema: any }) {
   return request('/v1/datasets', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
     dataset_id: string
   }>
 }
 
-export async function apiUpdateDataset(id: string, data: { name?: string; schema?: any; retention_days?: number }) {
+export async function apiUpdateDataset(id: string, data: { name?: string; schema?: any }) {
   return request(`/v1/datasets/${id}`, { method: 'PATCH', body: JSON.stringify(data) })
 }
 
@@ -152,6 +152,18 @@ export async function apiGetOperation(id: string) {
     inputs: string[]
     outputs: string[]
     status: string
+    dataset_id?: string
+    dataset?: {
+      dataset_id: string
+      name: string
+      schema: any
+    }
+    retention_policy?: {
+      jobRetentionDays: number
+      resultRetentionDays: number
+      autoDeleteAfter: boolean
+    }
+    mxe_program_id?: string
   }>
 }
 
@@ -160,6 +172,12 @@ export async function apiCreateOperation(input: {
   version: string
   pipeline: any
   mxeProgramId: string
+  datasetId?: string
+  retentionPolicy?: {
+    jobRetentionDays: number
+    resultRetentionDays: number
+    autoDeleteAfter: boolean
+  }
 }) {
   return request('/v1/pipelines/operations', { method: 'POST', body: JSON.stringify(input) }) as Promise<any>
 }
@@ -173,7 +191,7 @@ export async function apiDeprecateOperation(id: string) {
 }
 
 // Jobs
-export async function apiGetJobs(params?: { status?: string; limit?: number; cursor?: string }) {
+export async function apiGetJobs(params?: { status?: string; limit?: number; cursor?: string; since?: string }) {
   const query = new URLSearchParams(params as any).toString()
   return request(`/v1/jobs${query ? `?${query}` : ''}`) as Promise<{
     items: Array<{
@@ -216,6 +234,12 @@ export async function apiCreateJob(input: {
   operation: string
   parameters?: any
   inputs?: Array<any>
+  encrypted_inputs?: {
+    ct0: number[]
+    ct1: number[]
+    client_public_key: number[]
+    nonce: number[] | string
+  }
   result_format?: string
   callback_url?: string
 }) {
@@ -276,12 +300,22 @@ export async function apiValidatePipeline(pipeline: any) {
   }>
 }
 
-export async function apiTestPipeline(input: { pipeline: any; inputs: any }) {
-  return request('/v1/pipelines/test', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
-    outputs: any
-    steps: Array<any>
-    duration: number
-  }>
+export async function apiTestPipeline(input: { pipeline: any; inputs: any; mxeProgramId?: string }) {
+  const body = {
+    pipeline: input.pipeline,
+    inputs: input.inputs,
+    mxeProgramId: input.mxeProgramId || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6',
+    dryRun: true,
+  }
+  const res = await request('/v1/pipelines/execute', { method: 'POST', body: JSON.stringify(body) }) as {
+    result: any
+    execution: { steps: Array<any>; duration: number; status: string }
+  }
+  return {
+    outputs: res.result,
+    steps: res.execution?.steps || [],
+    duration: res.execution?.duration || 0,
+  }
 }
 
 export async function apiGetPipelineTemplates() {
@@ -339,21 +373,40 @@ export async function apiTestWebhook(url: string) {
 
 // Credits
 export async function apiGetCredits() {
-  return request('/v1/credits') as Promise<{
-    balance: number
-  }>
+  const out = await request('/v1/credits') as { balance_cents: number; plan?: string }
+  return { balance: (out.balance_cents || 0) / 100 }
 }
-export async function apiGetCreditHistory() {
-  return request('/v1/credits/history') as Promise<{
-    items: Array<{
-      transaction_id: string
-      amount: number
-      type: 'purchase' | 'usage' | 'refund' | 'bonus'
-      description: string
-      balance_after: number
-      created_at: string
-    }>
-  }>
+
+// Backward-compatible: map ledger to a transaction-like history with running balance
+export async function apiGetCreditHistory(params?: { limit?: number; cursor?: string }) {
+  const [balanceRes, ledger] = await Promise.all([
+    request('/v1/credits') as Promise<{ balance_cents: number }>,
+    apiGetCreditsLedger(params)
+  ])
+  let running = (balanceRes.balance_cents || 0) / 100
+  const items = ledger.items.map((i) => {
+    const delta = (i.delta_cents || 0) / 100
+    const reason = i.reason || ''
+    const type: 'purchase' | 'usage' | 'refund' | 'bonus' = delta >= 0
+      ? (reason === 'topup' ? 'purchase' : 'bonus')
+      : 'usage'
+    const description = reason === 'topup'
+      ? 'Top-up'
+      : reason === 'job_execution'
+        ? (i.job_id ? `Job execution (${i.job_id})` : 'Job execution')
+        : reason || 'Adjustment'
+    const tx = {
+      transaction_id: i.id,
+      amount: delta,
+      type,
+      description,
+      balance_after: running,
+      created_at: i.created_at,
+    }
+    running -= delta
+    return tx
+  })
+  return { items }
 }
 
 export async function apiTopUpCredits(amount_cents: number) {
@@ -387,3 +440,7 @@ export async function apiGetAttestation(jobId: string) {
   return request(`/v1/attestations/${jobId}`)
 }
 
+// Public
+export async function apiGetMxePublicKey(programId: string) {
+  return request(`/v1/public/mxe/${programId}`) as Promise<{ public_key: number[] }>
+}

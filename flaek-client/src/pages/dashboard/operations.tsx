@@ -5,9 +5,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Modal } from '@/components/ui/modal'
 import { navigate } from '@/lib/router'
-import { apiGetOperations, apiGetOperation, apiDeprecateOperation, apiCreateJob, apiGetDatasets, apiUpdateOperation } from '@/lib/api'
-import { x25519, RescueCipher, getMXEPublicKey, deserializeLE } from '@arcium-hq/client'
-import { Connection, PublicKey } from '@solana/web3.js'
+import { apiGetOperations, apiGetOperation, apiDeprecateOperation, apiUpdateOperation } from '@/lib/api'
 
 type Operation = {
   operation_id: string
@@ -24,10 +22,9 @@ export default function OperationsPage() {
   const [searchTerm, setSearchTerm] = useState('')
   const [selectedOp, setSelectedOp] = useState<any>(null)
   const [showDetails, setShowDetails] = useState(false)
-  const [showRunModal, setShowRunModal] = useState(false)
   const [showEdit, setShowEdit] = useState(false)
   const [editingOp, setEditingOp] = useState<any>(null)
-  const [runningOp, setRunningOp] = useState<any>(null)
+  
 
   useEffect(() => {
     loadOperations()
@@ -55,15 +52,11 @@ export default function OperationsPage() {
     }
   }
 
-  async function startRunJob(id: string) {
+  function openPlayground(id: string) {
     try {
-      const data = await apiGetOperation(id)
-      setRunningOp(data)
-      setShowRunModal(true)
-    } catch (error) {
-      console.error('Failed to load operation:', error)
-      alert('Failed to load operation details')
-    }
+      localStorage.setItem('flaek_last_op', id)
+      navigate('/dashboard/playground')
+    } catch {}
   }
 
   async function deprecateOperation(id: string, name: string) {
@@ -157,12 +150,9 @@ export default function OperationsPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     {op.status === 'active' && (
-                      <Button
-                        onClick={() => startRunJob(op.operation_id)}
-                        className="text-xs"
-                      >
+                      <Button onClick={() => openPlayground(op.operation_id)} className="text-xs">
                         <Play size={14} />
-                        Run
+                        Playground
                       </Button>
                     )}
                     <Button
@@ -215,16 +205,7 @@ export default function OperationsPage() {
         />
       )}
 
-      {showRunModal && runningOp && (
-        <RunJobModal
-          operation={runningOp}
-          open={showRunModal}
-          onClose={() => {
-            setShowRunModal(false)
-            setRunningOp(null)
-          }}
-        />
-      )}
+      {/* Run modal removed; use Playground instead */}
 
       {showDetails && selectedOp && (
         <Modal open={showDetails} onClose={() => setShowDetails(false)} title="Operation Details">
@@ -283,218 +264,7 @@ export default function OperationsPage() {
   )
 }
 
-function RunJobModal({ operation, open, onClose }: { operation: any; open: boolean; onClose: () => void }) {
-  const [datasets, setDatasets] = useState<any[]>([])
-  const [selectedDataset, setSelectedDataset] = useState('')
-  const [inputs, setInputs] = useState<Record<string, any>>({})
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState('')
-  const [useRealData, setUseRealData] = useState(false)
-  const [encryptionKey, setEncryptionKey] = useState('')
-
-  useEffect(() => {
-    if (open) {
-      loadDatasets()
-      const initialInputs: Record<string, any> = {}
-      if (operation.inputs) {
-        operation.inputs.forEach((input: string) => {
-          initialInputs[input] = ''
-        })
-      }
-      setInputs(initialInputs)
-
-      const savedKey = localStorage.getItem('flaek_encryption_key')
-      if (savedKey) {
-        setEncryptionKey(savedKey)
-      }
-    }
-  }, [open, operation])
-
-  function generateEncryptionKey() {
-    const randomHex = Array.from(crypto.getRandomValues(new Uint8Array(32)))
-      .map(b => b.toString(16).padStart(2, '0'))
-      .join('')
-    setEncryptionKey(randomHex)
-    localStorage.setItem('flaek_encryption_key', randomHex)
-  }
-
-  async function loadDatasets() {
-    try {
-      const data = await apiGetDatasets()
-      setDatasets(data.items.filter((d: any) => d.status === 'active'))
-    } catch (err) {
-      console.error('Failed to load datasets:', err)
-    }
-  }
-
-  async function handleRun() {
-    setError('')
-
-    if (!encryptionKey) {
-      setError('Please generate or provide an encryption key')
-      return
-    }
-
-    if (useRealData && !selectedDataset) {
-      setError('Please select a dataset')
-      return
-    }
-
-    setLoading(true)
-    try {
-      const privKeyBytes = new Uint8Array(encryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
-      const publicKey = x25519.getPublicKey(privKeyBytes)
-
-      const connection = new Connection('https://api.devnet.solana.com')
-      const mxeProgramId = new PublicKey(operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
-      const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
-      const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
-      const cipher = new RescueCipher(sharedSecret)
-
-      const nonce = crypto.getRandomValues(new Uint8Array(16))
-
-      const limbs = Object.values(inputs).map(val => {
-        const buf = new ArrayBuffer(32)
-        const view = new DataView(buf)
-        view.setBigUint64(0, BigInt(val), true)
-        return deserializeLE(new Uint8Array(buf))
-      })
-
-      const [ct0, ct1] = cipher.encrypt(limbs, nonce)
-
-      const result = await apiCreateJob({
-        dataset_id: selectedDataset || 'test-dataset',
-        operation: operation.operation_id,
-        encrypted_inputs: {
-          ct0: Array.from(ct0),
-          ct1: Array.from(ct1),
-          client_public_key: Array.from(publicKey),
-          nonce: Array.from(nonce)
-        }
-      })
-
-      alert(`Job created successfully! ID: ${result.job_id}`)
-      navigate('/dashboard/jobs')
-      onClose()
-    } catch (err: any) {
-      setError(err.message || 'Failed to create job')
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  return (
-    <Modal open={open} onClose={onClose} title={`Run ${operation.name}`}>
-      <div className="space-y-4">
-        <div className="p-3 bg-white/[0.02] rounded-lg border border-white/10">
-          <div className="text-xs text-white/50 mb-1">Operation</div>
-          <div className="font-medium">{operation.name}</div>
-          <div className="text-xs text-white/60 mt-1">v{operation.version}</div>
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-white/70 mb-2 block">Encryption Key</label>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={encryptionKey}
-              onChange={(e) => setEncryptionKey(e.target.value)}
-              placeholder="Generate or paste your encryption key"
-              className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white placeholder:text-white/30 focus:outline-none focus:border-brand-500/50 font-mono"
-            />
-            <Button
-              variant="secondary"
-              onClick={generateEncryptionKey}
-              className="text-xs"
-            >
-              Generate
-            </Button>
-          </div>
-          <p className="text-xs text-white/50 mt-1">Used for client-side encryption/decryption</p>
-        </div>
-
-        <div>
-          <label className="flex items-center gap-2 mb-3">
-            <input
-              type="checkbox"
-              checked={useRealData}
-              onChange={(e) => setUseRealData(e.target.checked)}
-              className="w-4 h-4"
-            />
-            <span className="text-sm font-medium">Run on real dataset</span>
-          </label>
-
-          {useRealData && (
-            <div>
-              <label className="text-xs font-semibold text-white/70 mb-2 block">Select Dataset</label>
-              <select
-                value={selectedDataset}
-                onChange={(e) => setSelectedDataset(e.target.value)}
-                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:border-brand-500/50"
-              >
-                <option value="">-- Choose dataset --</option>
-                {datasets.map((ds) => (
-                  <option key={ds.dataset_id} value={ds.dataset_id}>
-                    {ds.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={() => navigate('/dashboard/datasets')}
-                className="text-xs text-brand-500 hover:text-brand-400 mt-2"
-              >
-                + Create new dataset
-              </button>
-            </div>
-          )}
-        </div>
-
-        <div>
-          <label className="text-xs font-semibold text-white/70 mb-2 block">Test Inputs</label>
-          <div className="space-y-2">
-            {operation.inputs?.map((inputName: string) => (
-              <div key={inputName}>
-                <label className="text-xs text-white/60 mb-1 block">{inputName}</label>
-                <input
-                  type="text"
-                  value={inputs[inputName] || ''}
-                  onChange={(e) => setInputs({ ...inputs, [inputName]: e.target.value })}
-                  placeholder={`Enter ${inputName}`}
-                  className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-sm text-white placeholder:text-white/30 focus:outline-none focus:border-brand-500/50"
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {error && (
-          <div className="p-3 bg-red-500/10 border border-red-500/20 rounded-lg">
-            <p className="text-xs text-red-400">{error}</p>
-          </div>
-        )}
-
-        <div className="flex gap-2 pt-2">
-          <Button variant="secondary" onClick={onClose} disabled={loading} className="flex-1">
-            Cancel
-          </Button>
-          <Button onClick={handleRun} disabled={loading} className="flex-1">
-            {loading ? (
-              <>
-                <Loader2 size={16} className="animate-spin" />
-                Running...
-              </>
-            ) : (
-              <>
-                <Play size={16} />
-                Run Job
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-    </Modal>
-  )
-}
+// RunJobModal removed in favor of the Playground
 
 function EditOperationModal({ operation, open, onClose, onUpdate }: { operation: any; open: boolean; onClose: () => void; onUpdate: () => void }) {
   const [name, setName] = useState(operation.name)

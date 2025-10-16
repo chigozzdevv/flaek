@@ -4,7 +4,7 @@ export type JobDocument = mongoose.Document & {
   tenantId: string;
   datasetId: string;
   operationId: string;
-  source: { type: 'ephemeral'; ref: string } | { type: 'retained'; url: string } | { type: 'inline'; rows: any[] };
+  source: { type: 'encrypted'; data: any };
   status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelling' | 'cancelled';
   arciumRef?: string;
   result?: any;
@@ -12,7 +12,7 @@ export type JobDocument = mongoose.Document & {
   error?: any;
   mxeProgramId?: string;
   computationOffset?: string;
-  enc?: { nonceB64: string; clientPubKeyB64: string; privIvB64?: string; wrappedPrivB64?: string; algo: 'rescue'|'aes128'|'aes192'|'aes256' };
+  enc?: { nonceB64: string; clientPubKeyB64: string; algo: 'rescue' };
   callbackUrl?: string;
   cost?: { compute_usd: number; chain_usd: number; credits_used: number };
   createdAt: Date;

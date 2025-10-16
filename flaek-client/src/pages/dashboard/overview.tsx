@@ -21,24 +21,36 @@ export default function OverviewPage() {
 
   async function loadDashboardData() {
     try {
-      const [datasets, operations, jobs] = await Promise.all([
+      // Compute last 30 days window on client and pass 'since' to backend
+      const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString()
+      const [datasets, operations, firstPage] = await Promise.all([
         apiGetDatasets(),
         apiGetOperations(),
-        apiGetJobs({ limit: 10 }),
+        apiGetJobs({ limit: 100, since }),
       ])
+      // If there are more than 100 jobs in 30 days, paginate until we fetch them or hit a safe cap
+      let allJobs = [...firstPage.items]
+      let cursor = firstPage.next_cursor
+      let safety = 0
+      while (cursor && safety < 5) { // cap at 5 extra pages (max ~600 jobs)
+        const page = await apiGetJobs({ limit: 100, cursor, since })
+        allJobs = allJobs.concat(page.items)
+        cursor = page.next_cursor
+        safety += 1
+      }
 
-      const completedJobs = jobs.items.filter((j: any) => j.status === 'completed').length
-      const successRate = jobs.items.length > 0 
-        ? Math.round((completedJobs / jobs.items.length) * 100) 
+      const completedJobs = allJobs.filter((j: any) => j.status === 'completed').length
+      const successRate = allJobs.length > 0 
+        ? Math.round((completedJobs / allJobs.length) * 100) 
         : 0
 
       setStats({
-        jobsCount: jobs.items.length,
+        jobsCount: allJobs.length,
         operationsCount: operations.items.length,
         datasetsCount: datasets.items.length,
         successRate,
       })
-      setRecentJobs(jobs.items.slice(0, 5))
+      setRecentJobs(firstPage.items.slice(0, 5))
     } catch (error) {
       console.error('Failed to load dashboard data:', error)
     } finally {

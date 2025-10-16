@@ -5,18 +5,6 @@ import { JOB_QUEUE, SUBMIT_JOB_NAME } from '@/features/jobs/queue/job.queue';
 import { httpError } from '@/shared/errors';
 import { creditService } from '@/features/credits/credit.service';
 
-type IngestSource =
-  | { type: 'ephemeral'; ref: string }
-  | { type: 'retained'; url: string };
-
-type CreateFromIngestInput = {
-  tenantId: string;
-  datasetId: string;
-  operationId: string;
-  source: IngestSource;
-  rows: any[];
-};
-
 const connection = getRedis();
 const submitQueue = new Queue(JOB_QUEUE, { connection });
 const queueEvents = new QueueEvents(JOB_QUEUE, { connection });
@@ -34,33 +22,6 @@ async function enqueueSubmission(jobId: string) {
   console.log(`[Job Service] Enqueuing job: ${jobId}`);
   const bullJob = await submitQueue.add(SUBMIT_JOB_NAME, { jobId }, opts);
   console.log(`[Job Service] Job enqueued in submit queue with BullMQ ID: ${bullJob.id}`);
-}
-
-async function createFromIngest(input: CreateFromIngestInput) {
-  await creditService.deduct(input.tenantId, 100, 'job_execution');
-  const job = await jobRepository.create({
-    tenantId: input.tenantId,
-    datasetId: input.datasetId,
-    operationId: input.operationId,
-    source: input.source,
-    status: 'queued',
-  });
-  await enqueueSubmission(job.id);
-  return { job_id: job.id, status: job.status };
-}
-
-async function createInline(input: { tenantId: string; datasetId: string; operationId: string; rows: any[]; callbackUrl?: string }) {
-  await creditService.deduct(input.tenantId, 100, 'job_execution');
-  const job = await jobRepository.create({
-    tenantId: input.tenantId,
-    datasetId: input.datasetId,
-    operationId: input.operationId,
-    source: { type: 'inline', rows: input.rows },
-    callbackUrl: input.callbackUrl,
-    status: 'queued',
-  });
-  await enqueueSubmission(job.id);
-  return { job_id: job.id, status: job.status };
 }
 
 async function createWithEncryptedInputs(input: {
@@ -100,18 +61,19 @@ async function get(tenantId: string, jobId: string) {
   };
 }
 
-async function list(tenantId: string) {
-  const items = await jobRepository.list(tenantId);
-  return { 
-    items: items.map(j => ({ 
-      job_id: j.id, 
+async function list(tenantId: string, opts?: { limit?: number; cursor?: string; since?: Date }) {
+  const { items, nextCursor } = await jobRepository.list(tenantId, opts?.limit, opts?.cursor, opts?.since);
+  return {
+    items: items.map(j => ({
+      job_id: j.id,
       dataset_id: j.datasetId,
       operation_id: j.operationId,
-      status: j.status, 
+      status: j.status,
       created_at: j.createdAt,
       updated_at: j.updatedAt,
       error: j.error,
-    })) 
+    })),
+    next_cursor: nextCursor || undefined,
   };
 }
 
@@ -142,4 +104,4 @@ async function cancel(tenantId: string, jobId: string) {
   return { job_id: jobId, status: 'cancelled' };
 }
 
-export const jobService = { createFromIngest, createInline, createWithEncryptedInputs, get, list, cancel };
+export const jobService = { createWithEncryptedInputs, get, list, cancel };

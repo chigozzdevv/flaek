@@ -7,6 +7,7 @@ import { createKeySchema, revokeKeySchema } from '@/features/tenants/tenant.vali
 const router = Router();
 router.use(jwtAuth);
 router.get('/me', tenantController.me);
+router.get('/keys', tenantController.listKeys);
 router.post('/keys', schemaValidator(createKeySchema), tenantController.createKey);
 router.post('/publishable-keys', tenantController.createPublishableKey);
 router.post('/keys/:keyId/revoke', schemaValidator(revokeKeySchema), tenantController.revokeKey);

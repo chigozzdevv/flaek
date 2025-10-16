@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Key, Plus, Copy, Trash2, Eye, EyeOff } from 'lucide-react'
+import { Loader2, Key, Plus, Copy, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -22,7 +22,6 @@ export default function ApiKeysPage() {
   const [newKeyName, setNewKeyName] = useState('')
   const [creating, setCreating] = useState(false)
   const [newKeyValue, setNewKeyValue] = useState('')
-  const [visibleKeys, setVisibleKeys] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadKeys()
@@ -71,18 +70,6 @@ export default function ApiKeysPage() {
   function copyToClipboard(text: string) {
     navigator.clipboard.writeText(text)
     alert('Copied to clipboard!')
-  }
-
-  function toggleKeyVisibility(keyId: string) {
-    setVisibleKeys(prev => {
-      const newSet = new Set(prev)
-      if (newSet.has(keyId)) {
-        newSet.delete(keyId)
-      } else {
-        newSet.add(keyId)
-      }
-      return newSet
-    })
   }
 
   if (loading) {
@@ -136,15 +123,19 @@ export default function ApiKeysPage() {
                     </div>
                     <div className="flex items-center gap-2 mb-2">
                       <code className="text-sm font-mono bg-white/5 px-3 py-1 rounded border border-white/10">
-                        {visibleKeys.has(key.key_id) ? `${key.prefix}••••••••••••••••` : `${key.prefix}••••••••`}
+                        {key.prefix}_••••••••••••••••••••
                       </code>
                       <button
-                        onClick={() => toggleKeyVisibility(key.key_id)}
-                        className="p-1.5 hover:bg-white/5 rounded transition"
+                        onClick={() => copyToClipboard(key.key_id)}
+                        className="p-1.5 hover:bg-white/5 rounded transition group"
+                        title="Copy Key ID"
                       >
-                        {visibleKeys.has(key.key_id) ? <EyeOff size={14} /> : <Eye size={14} />}
+                        <Copy size={14} className="text-white/50 group-hover:text-brand-400" />
                       </button>
                     </div>
+                    <p className="text-xs text-white/40 italic mb-2">
+                      Full key only shown once at creation
+                    </p>
                     <div className="grid grid-cols-2 gap-4 text-sm">
                       <div>
                         <span className="text-white/50">Created:</span>

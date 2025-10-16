@@ -1,5 +1,41 @@
 import { useEffect, useState } from 'react'
-import { Loader2, Box, Search, Plus, Lock, Brain, Zap, ChevronLeft, ChevronRight } from 'lucide-react'
+import {
+  Loader2,
+  Box,
+  Search,
+  // Category & common icons
+  Plus,
+  Scale,
+  GitBranch,
+  TrendingUp,
+  Package,
+  // Specific block icons from registry
+  Minus,
+  X,
+  Divide,
+  Percent,
+  Power,
+  ChevronRight as ChevronRightIcon,
+  ChevronLeft as ChevronLeftIcon,
+  Equal,
+  ChevronsUp,
+  ChevronsDown,
+  Ampersand,
+  Network,
+  Shuffle,
+  BarChart3,
+  Minimize2,
+  Maximize2,
+  Activity,
+  CreditCard,
+  Heart,
+  Vote,
+  Target,
+  Sigma,
+  ArrowUp,
+  ArrowDown,
+  Ban,
+} from 'lucide-react'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -18,20 +54,62 @@ type Block = {
   tags?: string[]
 }
 
+// Match backend categories (lowercase)
 const categoryColors: Record<string, string> = {
-  'Math': 'bg-blue-500/10 text-blue-400 border-blue-500/20',
-  'Logic': 'bg-purple-500/10 text-purple-400 border-purple-500/20',
-  'Crypto': 'bg-green-500/10 text-green-400 border-green-500/20',
-  'ML': 'bg-amber-500/10 text-amber-400 border-amber-500/20',
-  'Data': 'bg-cyan-500/10 text-cyan-400 border-cyan-500/20',
+  math: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
+  comparison: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
+  logical: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
+  statistical: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
+  use_case: 'bg-pink-500/10 text-pink-400 border-pink-500/20',
 }
 
 const categoryIcons: Record<string, any> = {
-  'Math': Plus,
-  'Logic': Zap,
-  'Crypto': Lock,
-  'ML': Brain,
-  'Data': Box,
+  math: Plus,
+  comparison: Scale,
+  logical: GitBranch,
+  statistical: TrendingUp,
+  use_case: Package,
+}
+
+// Map block.icon string (from backend registry) to actual lucide icons
+const iconComponentMap: Record<string, any> = {
+  // math
+  Plus,
+  Minus,
+  X,
+  Divide,
+  Percent,
+  Power,
+  // comparison
+  ChevronRight: ChevronRightIcon,
+  ChevronLeft: ChevronLeftIcon,
+  Equal,
+  ChevronsUp,
+  ChevronsDown,
+  Scale,
+  // logical / control
+  Ampersand,
+  Network,
+  GitBranch,
+  Shuffle,
+  Ban,
+  // statistical
+  BarChart3,
+  TrendingUp,
+  Minimize2,
+  Maximize2,
+  Activity,
+  Sigma,
+  ArrowUp,
+  ArrowDown,
+  // use cases
+  CreditCard,
+  Heart,
+  Vote,
+  Target,
+  Package,
+  // misc
+  Box,
 }
 
 const ITEMS_PER_PAGE = 12
@@ -132,7 +210,8 @@ export default function BlocksPage() {
           <>
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {paginatedBlocks.map((block) => {
-                const IconComponent = categoryIcons[block.category] || Box
+                const IconComponent = (block.icon && iconComponentMap[block.icon]) || categoryIcons[block.category] || Box
+                const badgeClass = categoryColors[block.category] || 'bg-white/10 text-white/90'
                 return (
               <Card key={block.id} className="p-4 hover:bg-white/[0.03] transition">
                 <div className="flex items-start gap-3 mb-3">
@@ -140,11 +219,17 @@ export default function BlocksPage() {
                     className="w-10 h-10 rounded-lg flex items-center justify-center"
                     style={{ backgroundColor: block.color || '#6a4ff8' }}
                   >
-                    <IconComponent size={20} className="text-white" />
+                    {IconComponent ? (
+                      <IconComponent size={20} className="text-white" />
+                    ) : (
+                      <span className="text-white text-sm font-bold">
+                        {block.icon?.charAt(0) || block.name.charAt(0)}
+                      </span>
+                    )}
                   </div>
                   <div className="flex-1">
                     <h3 className="font-semibold mb-1">{block.name}</h3>
-                    <Badge className={categoryColors[block.category] || 'bg-white/10 text-white/90'}>
+                    <Badge className={badgeClass}>
                       {block.category}
                     </Badge>
                   </div>
@@ -203,7 +288,7 @@ export default function BlocksPage() {
                     disabled={currentPage === 1}
                     className="text-xs"
                   >
-                    <ChevronLeft size={16} />
+                    <ChevronLeftIcon size={16} />
                     Previous
                   </Button>
                   <div className="flex items-center gap-1">
@@ -228,7 +313,7 @@ export default function BlocksPage() {
                     className="text-xs"
                   >
                     Next
-                    <ChevronRight size={16} />
+                    <ChevronRightIcon size={16} />
                   </Button>
                 </div>
               </div>

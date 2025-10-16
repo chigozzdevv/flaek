@@ -5,10 +5,7 @@ import { JobModel } from '@/features/jobs/job.model';
 import { jobRepository } from '@/features/jobs/job.repository';
 import { operationRepository } from '@/features/operations/operation.repository';
 import { DatasetModel } from '@/features/datasets/dataset.model';
-import { getEphemeral, delEphemeral } from '@/features/ingest/ephemeral.store';
-import axios from 'axios';
 import { ArciumClient } from '@/clients/arcium-client';
-import { sha256Hex } from '@/utils/hash';
 import { executePipeline } from './pipeline.executor';
 
 export function startSubmitWorker() {
@@ -46,44 +43,30 @@ export function startSubmitWorker() {
       return;
     }
 
-    let buffer: Buffer | null = null;
     let clientEncryptedData: any = null;
 
     if (job.source.type === 'encrypted') {
       clientEncryptedData = job.source.data;
       console.log(`[Submit Worker] Using client-encrypted data for job ${jobId}`);
-    } else if (job.source.type === 'ephemeral') {
-      buffer = await getEphemeral(job.source.ref);
-      await delEphemeral(job.source.ref).catch(() => {});
-    } else if (job.source.type === 'retained') {
-      const res = await axios.get(job.source.url, { responseType: 'arraybuffer' });
-      buffer = Buffer.from(res.data);
-      try {
-        if (ds && Array.isArray(ds.batches)) {
-          const batch = ds.batches.find((b: any) => b.url === job.source.url);
-          if (batch) {
-            const calc = sha256Hex(buffer);
-            if (batch.sha256 !== calc) {
-              await jobRepository.setStatus(jobId, 'failed', { error: 'sha256_mismatch' });
-              return;
-            }
-          }
-        }
-      } catch {}
-    } else if (job.source.type === 'inline') {
-      buffer = Buffer.from(job.source.rows.map((r: any) => JSON.stringify(r)).join('\n'), 'utf8');
+    } else {
+      // Reject non-encrypted sources
+      console.error(`[Submit Worker] Job ${jobId} source type '${job.source.type}' is not supported. Only 'encrypted' source type is allowed for confidential computing.`);
+      await jobRepository.setStatus(jobId, 'failed', { 
+        error: 'encryption_required', 
+        details: 'Client-side encryption is required for confidential computing. Please use encrypted_inputs.' 
+      });
+      return;
     }
 
-    if (!buffer && !clientEncryptedData) {
-      console.error(`[Submit Worker] No buffer or encrypted data for job ${jobId}, source type: ${job.source.type}`);
-      await jobRepository.setStatus(jobId, 'failed', { error: 'missing_payload' });
+    if (!clientEncryptedData) {
+      console.error(`[Submit Worker] No encrypted data for job ${jobId}`);
+      await jobRepository.setStatus(jobId, 'failed', { error: 'missing_encrypted_payload' });
       return;
     }
 
     if (op.pipelineSpec?.type === 'visual_pipeline') {
       console.log(`[Submit Worker] Job ${jobId} is a visual pipeline, executing...`);
-      const inputData = clientEncryptedData || (buffer ? JSON.parse(buffer.toString()) : {});
-      await executePipeline(job, op, inputData, clientEncryptedData ? 'encrypted' : 'plaintext');
+      await executePipeline(job, op, clientEncryptedData, 'encrypted');
       console.log(`[Submit Worker] Visual pipeline execution completed for job ${jobId}`);
       return;
     }
@@ -104,23 +87,48 @@ export function startSubmitWorker() {
 
     try {
       const sdk = new ArciumClient();
-      const { tx, computationOffset, nonceB64, clientPubKeyB64, clientPrivB64 } = await sdk.submitQueue({
+
+      // Confidential computing: require client-encrypted data
+      if (!clientEncryptedData) {
+        throw new Error('Client-side encryption is required for confidential computing. Job must include encrypted_inputs.');
+      }
+
+      const ct0Arr: number[] | undefined = clientEncryptedData.ct0;
+      const ct1Arr: number[] | undefined = clientEncryptedData.ct1;
+      const clientPubKeyArr: number[] | undefined = clientEncryptedData.client_public_key;
+      const nonceVal: string | number[] | undefined = clientEncryptedData.nonce;
+
+      if (!ct0Arr || !ct1Arr || !clientPubKeyArr || !nonceVal) {
+        throw new Error('Invalid encrypted_inputs: missing ct0, ct1, client_public_key, or nonce');
+      }
+
+      const ct0 = Buffer.from(Uint8Array.from(ct0Arr));
+      const ct1 = Buffer.from(Uint8Array.from(ct1Arr));
+      const payloadToSend = Buffer.concat([ct0, ct1]);
+
+      const clientPublicKeyBuf = Buffer.from(Uint8Array.from(clientPubKeyArr));
+      const clientNonceBuf = typeof nonceVal === 'string'
+        ? Buffer.from(nonceVal, 'base64')
+        : Buffer.from(Uint8Array.from(nonceVal));
+
+      const { tx, computationOffset, nonceB64, clientPubKeyB64 } = await sdk.submitQueue({
         mxeProgramId: op.mxeProgramId,
         compDefOffset: (op as any).compDefOffset as number,
         circuit: circuitName,
         accounts: op.accounts || {},
-        payload: buffer,
+        payload: payloadToSend,
+        clientPublicKey: clientPublicKeyBuf,
+        clientNonce: clientNonceBuf,
       });
 
       console.log(`[Submit Worker] Arcium submission successful for job ${jobId}, tx: ${tx}`);
 
-      const { wrapSecret } = await import('@/utils/secret-wrap')
-      const wrapped = wrapSecret(Buffer.from(clientPrivB64, 'base64'))
+      // Store job metadata with encryption info (no private keys stored)
       await jobRepository.setStatus(jobId, 'running', {
         arciumRef: tx,
         mxeProgramId: op.mxeProgramId,
         computationOffset,
-        enc: { nonceB64, clientPubKeyB64, privIvB64: wrapped.ivB64, wrappedPrivB64: wrapped.cipherB64, algo: 'rescue' },
+        enc: { nonceB64, clientPubKeyB64, algo: 'rescue' },
       });
 
       const opts: JobsOptions = {

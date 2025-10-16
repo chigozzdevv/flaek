@@ -1,4 +1,4 @@
-import { LayoutDashboard, Database, Workflow, Package, Briefcase, Blocks, Key, Webhook, CreditCard, BookOpen, LogOut } from 'lucide-react'
+import { LayoutDashboard, Database, Workflow, Package, Briefcase, Blocks, Key, Webhook, CreditCard, BookOpen, LogOut, Play } from 'lucide-react'
 import BrandLogo from '@/components/brand-logo'
 import { navigate } from '@/lib/router'
 import { clearToken } from '@/lib/auth'
@@ -8,6 +8,7 @@ const navItems = [
   { icon: Database, label: 'Datasets', path: '/dashboard/datasets' },
   { icon: Workflow, label: 'Pipeline Builder', path: '/dashboard/pipelines' },
   { icon: Package, label: 'Operations', path: '/dashboard/operations' },
+  { icon: Play, label: 'Playground', path: '/dashboard/playground' },
   { icon: Briefcase, label: 'Jobs', path: '/dashboard/jobs' },
   { icon: Blocks, label: 'Blocks Library', path: '/dashboard/blocks' },
   { icon: Key, label: 'API Keys', path: '/dashboard/keys' },
@@ -27,8 +28,8 @@ export function Sidebar({ currentPath }: SidebarProps) {
   }
 
   return (
-    <div className="w-64 border-r border-white/10 bg-bg-elev flex flex-col">
-      <div className="p-6 border-b border-white/10">
+    <div className="fixed top-0 left-0 h-screen w-64 border-r border-white/10 bg-bg-elev flex flex-col z-40">
+      <div className="h-16 px-6 border-b border-white/10 flex items-center">
         <BrandLogo className="h-7" />
       </div>
 

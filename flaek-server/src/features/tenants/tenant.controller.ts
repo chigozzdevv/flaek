@@ -27,4 +27,10 @@ async function revokeKey(req: Request, res: Response) {
   res.status(204).end();
 }
 
-export const tenantController = { me, createKey, createPublishableKey, revokeKey };
+async function listKeys(req: Request, res: Response) {
+  const user = (req as any).user as { sub: string };
+  const out = await tenantService.listKeys(user.sub);
+  res.json(out);
+}
+
+export const tenantController = { me, createKey, createPublishableKey, revokeKey, listKeys };

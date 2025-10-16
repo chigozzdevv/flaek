@@ -9,8 +9,17 @@ export const jobRepository = {
   async get(tenantId: string, jobId: string) {
     return JobModel.findOne({ _id: jobId, tenantId }).exec();
   },
-  async list(tenantId: string, limit = 20) {
-    return JobModel.find({ tenantId }).sort({ createdAt: -1 }).limit(limit).exec();
+  async list(tenantId: string, limit: number = 20, cursor?: string, since?: Date) {
+    const query: any = { tenantId };
+    if (since) {
+      query.createdAt = { $gte: since };
+    }
+    if (cursor) {
+      query._id = { $lt: cursor };
+    }
+    const items = await JobModel.find(query).sort({ _id: -1 }).limit(limit).exec();
+    const nextCursor = items.length === limit ? items[items.length - 1].id : null;
+    return { items, nextCursor } as const;
   },
   async setStatus(jobId: string, status: string, patch: any = {}) {
     const job = await JobModel.findByIdAndUpdate(jobId, { status, ...patch }, { new: true }).exec();

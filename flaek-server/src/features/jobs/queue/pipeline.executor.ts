@@ -2,7 +2,9 @@ import { JobModel } from '@/features/jobs/job.model';
 import { OperationDocument } from '@/features/operations/operation.model';
 import { PipelineDefinition, PipelineEngine } from '@/features/pipelines/pipeline.engine';
 import { jobRepository } from '@/features/jobs/job.repository';
-import { creditService } from '@/features/credits/credit.service';
+import { Queue, JobsOptions } from 'bullmq';
+import { getRedis } from '@/db/redis';
+import { JOB_QUEUE } from '@/features/jobs/queue/job.queue';
 
 export async function executePipeline(
   job: any,
@@ -38,28 +40,30 @@ export async function executePipeline(
 
     const firstStepWithTx = result.steps.find(s => s.outputs?.tx);
     const arciumTx = firstStepWithTx?.outputs?.tx;
+    const computationOffset = firstStepWithTx?.outputs?.computationOffset;
+    const nonceB64 = firstStepWithTx?.outputs?.nonceB64;
+    const clientPubKeyB64 = firstStepWithTx?.outputs?.clientPubKeyB64;
 
-    const attestation = {
-      provider: 'arcium',
-      pipeline_execution: true,
-      steps: result.steps.length,
-      status: 'completed',
-      tx: arciumTx,
-    };
-
-    const cost = {
-      compute_usd: 0.001 * result.steps.length,
-      chain_usd: 0.00001 * result.steps.length,
-      credits_used: result.steps.length,
-    };
-
-    await creditService.deduct(job.tenantId, result.steps.length, 'pipeline_computation', job.id);
-    await jobRepository.setStatus(job.id, 'completed', {
-      result: result.outputs,
-      attestation,
+    // Mark job as running with Arcium refs; finalization worker will complete it
+    await jobRepository.setStatus(job.id, 'running', {
       arciumRef: arciumTx,
-      cost,
+      mxeProgramId: operation.mxeProgramId,
+      computationOffset,
+      enc: nonceB64 && clientPubKeyB64 ? { nonceB64, clientPubKeyB64, algo: 'rescue' } : undefined,
     });
+
+    // Enqueue finalize job to wait for result
+    const connection = getRedis();
+    const queue = new Queue(JOB_QUEUE, { connection });
+    const opts: JobsOptions = {
+      removeOnComplete: 100,
+      removeOnFail: 100,
+      delay: 5000,
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 3000 }
+    };
+    console.log(`[Pipeline Executor] Queueing finalize job for ${job.id} with 5s delay`);
+    await queue.add('finalize', { jobId: job.id }, opts);
   } catch (error: any) {
     console.error(`[Pipeline Executor] Pipeline execution failed for job ${job.id}:`, error.message);
     

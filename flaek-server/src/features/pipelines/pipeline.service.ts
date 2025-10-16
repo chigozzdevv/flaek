@@ -10,6 +10,7 @@ async function createOperationFromPipeline(
     name: string;
     version: string;
     mxeProgramId: string;
+    datasetId?: string;
   }
 ): Promise<any> {
   const pipelineSpec = {
@@ -39,6 +40,7 @@ async function createOperationFromPipeline(
     outputs,
     mxeProgramId: metadata.mxeProgramId,
     ...(accounts ? { accounts } : {}),
+    ...(metadata.datasetId ? { datasetId: metadata.datasetId } : {}),
   });
 
   return {

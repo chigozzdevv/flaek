@@ -2,7 +2,7 @@ import { OperationModel } from '@/features/operations/operation.model';
 
 export const operationRepository = {
   async create(tenantId: string, data: {
-    name: string; version: string; pipelineSpec: any; pipelineHash: string; artifactUri: string; runtime: 'container'|'wasm'|'arcium'; inputs: string[]; outputs: string[]; mxeProgramId: string; compDefOffset?: number; programId?: string; method?: string; accounts?: any;
+    name: string; version: string; pipelineSpec: any; pipelineHash: string; artifactUri: string; runtime: 'container'|'wasm'|'arcium'; inputs: string[]; outputs: string[]; mxeProgramId: string; compDefOffset?: number; programId?: string; method?: string; accounts?: any; datasetId?: string; retentionPolicy?: any;
   }) {
     const op = new OperationModel({ tenantId, ...data });
     return op.save();

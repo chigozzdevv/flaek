@@ -30,10 +30,7 @@ export interface PipelineDefinition {
 }
 
 export interface ExecutionContext {
-  // Encrypted values keyed by "nodeId.outputName"
   values: Map<string, any>;
-  // Decrypted values (only for inputs and final outputs)
-  decryptedInputs: Map<string, any>;
 }
 
 export class PipelineEngine {
@@ -61,12 +58,11 @@ export class PipelineEngine {
 
     const context: ExecutionContext = {
       values: new Map(),
-      decryptedInputs: new Map(Object.entries(inputs)),
     };
 
     if (options?.clientEncrypted) {
       console.log(`[Pipeline Executor] Using client-encrypted inputs`);
-      context.values.set('encrypted_inputs', inputs);
+      // No need to stash in context; pass directly to executeBlock
     } else {
       const inputNodes = pipeline.nodes.filter(n => n.type === 'input');
       console.log(`[Pipeline Executor] Loading ${inputNodes.length} input nodes with data:`, inputs);
@@ -74,8 +70,9 @@ export class PipelineEngine {
         const fieldName = inputNode.data?.fieldName || inputNode.id;
         if (inputs[fieldName] !== undefined) {
           const key = `${inputNode.id}.value`;
-          console.log(`[Pipeline Executor] Setting ${key} = ${inputs[fieldName]}`);
-          context.values.set(key, inputs[fieldName]);
+          const coerced = this.coerce(inputs[fieldName]);
+          console.log(`[Pipeline Executor] Setting ${key} = ${coerced}`);
+          context.values.set(key, coerced);
         }
       }
     }
@@ -98,7 +95,7 @@ export class PipelineEngine {
       const nodeInputs = this.gatherNodeInputs(node, pipeline, context);
       const stepStart = Date.now();
       try {
-        const clientEncData = options?.clientEncrypted ? context.values.get('encrypted_inputs') : undefined;
+        const clientEncData = options?.clientEncrypted ? inputs : undefined;
         const result = await this.executeBlock(block.circuit, nodeInputs, options, clientEncData);
 
         for (const [outputName, value] of Object.entries(result)) {
@@ -160,26 +157,30 @@ export class PipelineEngine {
   private async executeBlock(
     circuit: string,
     inputs: Record<string, any>,
-    options?: { cluster?: string },
+    options?: { cluster?: string; dryRun?: boolean },
     clientEncryptedData?: any
   ): Promise<Record<string, any>> {
     try {
       console.log(`[Pipeline Executor] Executing circuit '${circuit}'`);
+
+      // Dry-run: simulate execution without Arcium using core block logic
+      if (options?.dryRun) {
+        const simulated = this.simulateCircuit(circuit, inputs);
+        return simulated;
+      }
+
       const compDefOffset = getCircuitOffset(circuit);
 
-      let payload: Buffer;
-
-      if (clientEncryptedData) {
-        console.log(`[Pipeline Executor] Using client-encrypted data`);
-        const ct0 = Buffer.from(clientEncryptedData.ct0);
-        const ct1 = Buffer.from(clientEncryptedData.ct1);
-        payload = Buffer.concat([ct0, ct1]);
-        console.log(`[Pipeline Executor] Client-encrypted payload (${payload.length} bytes)`);
-      } else {
-        console.log(`[Pipeline Executor] Encoding inputs:`, inputs);
-        payload = this.encodeCircuitInputs(inputs);
-        console.log(`[Pipeline Executor] Encoded payload (${payload.length} bytes):`, payload.toString('hex'));
+      // Confidential computing: require client-encrypted data
+      if (!clientEncryptedData) {
+        throw new Error('Client-side encryption is required for confidential computing. Pipeline execution requires encrypted inputs.');
       }
+
+      console.log(`[Pipeline Executor] Using client-encrypted data`);
+      const ct0 = Buffer.from(clientEncryptedData.ct0);
+      const ct1 = Buffer.from(clientEncryptedData.ct1);
+      const payload = Buffer.concat([ct0, ct1]);
+      console.log(`[Pipeline Executor] Client-encrypted payload (${payload.length} bytes)`);
 
       const txInfo = await this.arciumClient.submitQueue({
         mxeProgramId: this.mxeProgramId.toBase58(),
@@ -187,8 +188,10 @@ export class PipelineEngine {
         circuit,
         accounts: options?.cluster ? { cluster: options.cluster } : {},
         payload,
-        clientPublicKey: clientEncryptedData ? Buffer.from(clientEncryptedData.client_public_key) : undefined,
-        clientNonce: clientEncryptedData ? Buffer.from(clientEncryptedData.nonce) : undefined,
+        clientPublicKey: Buffer.from(clientEncryptedData.client_public_key),
+        clientNonce: typeof clientEncryptedData.nonce === 'string'
+          ? Buffer.from(clientEncryptedData.nonce, 'base64')
+          : Buffer.from(Uint8Array.from(clientEncryptedData.nonce)),
       });
 
       console.log(`[Pipeline Executor] Circuit '${circuit}' submitted, tx: ${txInfo.tx}`);
@@ -196,35 +199,13 @@ export class PipelineEngine {
       return {
         tx: txInfo.tx,
         computationOffset: txInfo.computationOffset,
+        nonceB64: (txInfo as any).nonceB64,
+        clientPubKeyB64: (txInfo as any).clientPubKeyB64,
         status: 'submitted'
       };
     } catch (error: any) {
       throw new Error(`Failed to execute circuit '${circuit}': ${error.message}`);
     }
-  }
-
-  private encodeCircuitInputs(inputs: Record<string, any>): Buffer {
-    // Encode each input field as a separate 32-byte chunk (for Arcium encryption)
-    // Each u64 value is padded to 32 bytes
-    if (!inputs || typeof inputs !== 'object') {
-      throw new Error(`Invalid inputs: expected object, got ${typeof inputs}`);
-    }
-    
-    const buffers: Buffer[] = [];
-    
-    for (const [key, value] of Object.entries(inputs)) {
-      console.log(`[Pipeline Executor] Encoding ${key}=${value} (type: ${typeof value})`);
-      // Each field gets a full 32-byte chunk (padded)
-      const buf = Buffer.alloc(32);
-      buf.writeBigUInt64LE(BigInt(value), 0);
-      buffers.push(buf);
-    }
-    
-    if (buffers.length === 0) {
-      throw new Error('No inputs to encode');
-    }
-    
-    return Buffer.concat(buffers);
   }
 
   private gatherNodeInputs(
@@ -234,7 +215,6 @@ export class PipelineEngine {
   ): Record<string, any> {
     const inputs: Record<string, any> = {};
 
-    // Only copy constant input values from node.data, skip metadata fields
     if (node.data) {
       const metadataKeys = ['label', 'blockId', 'block', 'fieldName'];
       for (const [key, value] of Object.entries(node.data)) {
@@ -259,11 +239,11 @@ export class PipelineEngine {
         targetInput = sourceNode.data.fieldName;
       }
       if (!targetInput) {
-        targetInput = 'value'; // fallback
+        targetInput = 'value';
       }
       
       const key = `${edge.source}.${sourceOutput}`;
-      const value = context.values.get(key);
+      const value = this.coerce(context.values.get(key));
       
       console.log(`[Pipeline Executor] Edge ${edge.source} -> ${node.id}: looking for '${key}', found:`, value, `(will map to '${targetInput}')`);
       
@@ -349,8 +329,181 @@ export class PipelineEngine {
     }
   }
 
-  async executeParallel(pipeline: PipelineDefinition, inputs: Record<string, any>): Promise<ExecutionResult> {
-    return this.execute(pipeline, inputs);
+  // Helpers
+  private coerce(v: any): any {
+    if (typeof v === 'string') {
+      const trimmed = v.trim();
+      if (trimmed === '') return v;
+      if (/^[-+]?\d+(?:\.\d+)?$/.test(trimmed)) {
+        const num = Number(trimmed);
+        return Number.isNaN(num) ? v : num;
+      }
+    }
+    return v;
+  }
+
+  private asNum(v: any): number {
+    const c = this.coerce(v);
+    if (typeof c === 'number') return c;
+    return Number(c) || 0;
+  }
+
+  private asBool01(v: any): number { return this.asNum(v) ? 1 : 0 }
+
+  private simulateCircuit(circuit: string, rawInputs: Record<string, any>): Record<string, any> {
+    // Coerce all numeric-like strings
+    const inputs: Record<string, any> = {}
+    for (const [k, v] of Object.entries(rawInputs)) inputs[k] = this.coerce(v)
+
+    const out = (obj: Record<string, any>) => obj
+    const nums = Object.values(inputs).map(v => this.asNum(v)).filter(v => !Number.isNaN(v))
+    const first2 = (fallbackA?: number, fallbackB?: number): [number, number] => {
+      if (typeof inputs.a !== 'undefined' && typeof inputs.b !== 'undefined') {
+        return [this.asNum(inputs.a), this.asNum(inputs.b)]
+      }
+      if (typeof inputs.value !== 'undefined') {
+        // common single-value key
+        return [this.asNum(inputs.value), fallbackB ?? 0]
+      }
+      if (nums.length >= 2) return [nums[0], nums[1]]
+      if (nums.length === 1) return [nums[0], fallbackB ?? 0]
+      return [fallbackA ?? 0, fallbackB ?? 0]
+    }
+
+    switch (circuit) {
+      // arithmetic
+      case 'add': {
+        if (typeof inputs.a !== 'undefined' || typeof inputs.b !== 'undefined') {
+          return out({ result: this.asNum(inputs.a) + this.asNum(inputs.b) })
+        }
+        return out({ result: nums.reduce((a, b) => a + b, 0) })
+      }
+      case 'subtract': {
+        const [a, b] = first2()
+        return out({ result: a - b })
+      }
+      case 'multiply': {
+        if (typeof inputs.a !== 'undefined' || typeof inputs.b !== 'undefined') {
+          return out({ result: this.asNum(inputs.a) * this.asNum(inputs.b) })
+        }
+        return out({ result: nums.length ? nums.reduce((a, b) => a * b, 1) : 0 })
+      }
+      case 'divide': {
+        const [a, b] = first2(0, 1)
+        return out({ result: Math.floor(a / (b || 1)) })
+      }
+      case 'modulo': {
+        const [a, b] = first2(0, 1)
+        return out({ result: a % (b || 1) })
+      }
+      case 'power': {
+        const [a, b] = first2(0, 1)
+        return out({ result: Math.pow(a, b) })
+      }
+
+      // comparisons
+      case 'greater_than': return out({ result: this.asNum(inputs.a) > this.asNum(inputs.b) ? 1 : 0 })
+      case 'less_than': return out({ result: this.asNum(inputs.a) < this.asNum(inputs.b) ? 1 : 0 })
+      case 'equal': return out({ result: this.asNum(inputs.a) === this.asNum(inputs.b) ? 1 : 0 })
+      case 'greater_equal': return out({ result: this.asNum(inputs.a) >= this.asNum(inputs.b) ? 1 : 0 })
+      case 'less_equal': return out({ result: this.asNum(inputs.a) <= this.asNum(inputs.b) ? 1 : 0 })
+
+      // logic
+      case 'and': return out({ result: (this.asBool01(inputs.a) && this.asBool01(inputs.b)) ? 1 : 0 })
+      case 'or': return out({ result: (this.asBool01(inputs.a) || this.asBool01(inputs.b)) ? 1 : 0 })
+      case 'xor': return out({ result: (this.asBool01(inputs.a) ^ this.asBool01(inputs.b)) ? 1 : 0 })
+      case 'not': return out({ result: this.asBool01(inputs.a) ? 0 : 1 })
+
+      // control flow
+      case 'if_else': return out({ result: this.asBool01(inputs.condition) ? this.asNum(inputs.true_value) : this.asNum(inputs.false_value) })
+      case 'in_range': {
+        const v = this.asNum(inputs.value)
+        const min = this.asNum(inputs.min)
+        const max = this.asNum(inputs.max)
+        return out({ result: v >= min && v <= max ? 1 : 0 })
+      }
+      case 'meets_threshold': {
+        const v = this.asNum(inputs.value)
+        const t = this.asNum(inputs.threshold)
+        return out({ result: v >= t ? 1 : 0 })
+      }
+
+      // statistical
+      case 'sum': {
+        const arr = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const count = this.asNum(inputs.count) || arr.length
+        return out({ result: arr.slice(0, count).reduce((a, b) => a + b, 0) })
+      }
+      case 'average': {
+        const arr = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const count = this.asNum(inputs.count) || arr.length
+        const slice = arr.slice(0, count)
+        const sum = slice.reduce((a, b) => a + b, 0)
+        return out({ result: slice.length ? Math.floor(sum / slice.length) : 0 })
+      }
+      case 'min': {
+        const arr = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const count = this.asNum(inputs.count) || arr.length
+        const slice = arr.slice(0, count)
+        return out({ result: slice.length ? Math.min(...slice) : 0 })
+      }
+      case 'max': {
+        const arr = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const count = this.asNum(inputs.count) || arr.length
+        const slice = arr.slice(0, count)
+        return out({ result: slice.length ? Math.max(...slice) : 0 })
+      }
+      case 'median': {
+        const arr = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const count = this.asNum(inputs.count) || arr.length
+        const s = arr.slice(0, count).sort((a, b) => a - b)
+        if (!s.length) return out({ result: 0 })
+        const mid = Math.floor(s.length / 2)
+        return out({ result: s.length % 2 ? s[mid] : Math.floor((s[mid - 1] + s[mid]) / 2) })
+      }
+      case 'weighted_average': {
+        const values = Array.isArray(inputs.values) ? inputs.values.map(v => this.asNum(v)) : []
+        const weights = Array.isArray(inputs.weights) ? inputs.weights.map(v => this.asNum(v)) : []
+        const n = Math.min(values.length, weights.length)
+        if (!n) return out({ result: 0 })
+        let ws = 0, sum = 0
+        for (let i = 0; i < n; i++) { sum += values[i] * weights[i]; ws += weights[i]; }
+        return out({ result: ws ? Math.floor(sum / ws) : 0 })
+      }
+
+      // simple use cases
+      case 'vote_tally': {
+        const v = this.asBool01(inputs.vote)
+        return out({ result: v })
+      }
+      case 'credit_score': {
+        const income = this.asNum(inputs.income)
+        const debt = this.asNum(inputs.debt)
+        const credit_history = this.asNum(inputs.credit_history)
+        const missed_payments = this.asNum(inputs.missed_payments)
+        let score = 600 + Math.floor((income - debt) / 1000) + credit_history * 5 - missed_payments * 20
+        score = Math.max(300, Math.min(850, score))
+        const approved = score >= 650 ? 1 : 0
+        return { score, approved }
+      }
+      case 'health_risk': {
+        const age = this.asNum(inputs.age)
+        const bmi = this.asNum(inputs.bmi)
+        const smoker = this.asBool01(inputs.smoker)
+        const exercise = this.asNum(inputs.exercise_hours)
+        const fam = this.asBool01(inputs.family_history)
+        let risk = Math.min(100, Math.max(0, Math.floor(age * 0.3 + (bmi - 18) * 2 + smoker * 20 + fam * 15 - exercise * 2)))
+        let category = 0
+        if (risk >= 75) category = 3
+        else if (risk >= 50) category = 2
+        else if (risk >= 25) category = 1
+        return { risk_score: risk, risk_category: category }
+      }
+      default: {
+        const nums = Object.values(inputs).map(v => this.asNum(v)).filter(v => !Number.isNaN(v))
+        return out({ result: nums.length ? nums[0] : 0 })
+      }
+    }
   }
 }
 

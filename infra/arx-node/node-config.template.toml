@@ -1,0 +1,17 @@
+[node]
+# Change per node
+offset = 71000001
+hardware_claim = 0
+starting_epoch = 0
+ending_epoch = 9223372036854775807
+
+[network]
+address = "0.0.0.0"
+
+[solana]
+# Replace with your RPC endpoints (Devnet)
+endpoint_rpc = "https://devnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"
+endpoint_wss = "wss://devnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY"
+cluster = "Devnet"
+commitment.commitment = "confirmed"
+

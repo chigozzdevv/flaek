@@ -131,22 +131,36 @@ export default function JobsPage() {
     setDecrypting(true)
     try {
       const privKeyBytes = new Uint8Array(encryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
-      const publicKey = x25519.getPublicKey(privKeyBytes)
 
       const connection = new Connection('https://api.devnet.solana.com')
       const mxeProgramId = new PublicKey(selectedJob.result.mxe_public_key || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
-      const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
+      const mxePublicKey = await getMXEPublicKey({ connection } as any, mxeProgramId)
+      
+      if (!mxePublicKey) {
+        alert('Failed to retrieve MXE public key')
+        setDecrypting(false)
+        return
+      }
+      
       const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
       const cipher = new RescueCipher(sharedSecret)
 
       const nonce = selectedJob.result.nonce
-        ? new Uint8Array(Buffer.from(selectedJob.result.nonce, 'base64'))
+        ? new Uint8Array(
+            atob(selectedJob.result.nonce)
+              .split('')
+              .map((c: string) => c.charCodeAt(0))
+          )
         : new Uint8Array(16)
 
-      const ct0 = new Uint8Array(selectedJob.result.ct0)
-      const ct1 = new Uint8Array(selectedJob.result.ct1)
+      const ct0 = Array.isArray(selectedJob.result.ct0)
+        ? new Uint8Array(selectedJob.result.ct0)
+        : new Uint8Array(Object.values(selectedJob.result.ct0))
+      const ct1 = Array.isArray(selectedJob.result.ct1)
+        ? new Uint8Array(selectedJob.result.ct1)
+        : new Uint8Array(Object.values(selectedJob.result.ct1))
 
-      const decrypted = cipher.decrypt([ct0, ct1], nonce)
+      const decrypted = cipher.decrypt([ct0 as any, ct1 as any], nonce)
 
       let resultValue: any
       if (typeof decrypted === 'bigint') {

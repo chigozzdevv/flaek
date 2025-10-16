@@ -16,6 +16,12 @@ export type OperationDocument = mongoose.Document & {
   programId?: string;
   method?: string;
   accounts?: any;
+  datasetId?: string;
+  retentionPolicy?: {
+    jobRetentionDays: number;
+    resultRetentionDays: number;
+    autoDeleteAfter: boolean;
+  };
   createdAt: Date;
   updatedAt: Date;
 };
@@ -36,6 +42,8 @@ const operationSchema = new Schema<any>({
   programId: { type: String },
   method: { type: String },
   accounts: { type: Schema.Types.Mixed },
+  datasetId: { type: String, index: true },
+  retentionPolicy: { type: Schema.Types.Mixed },
 }, { timestamps: true });
 
 export const OperationModel = mongoose.models.Operation || mongoose.model<OperationDocument>('Operation', operationSchema);

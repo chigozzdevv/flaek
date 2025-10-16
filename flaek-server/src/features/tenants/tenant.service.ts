@@ -48,4 +48,20 @@ async function createPublishable(ownerUserId: string) {
   return { publishable_key: t.publishableKey, tenant_public_key: t.tenantPublicKey };
 }
 
-export const tenantService = { me, createKey, revokeKey, createPublishable };
+async function listKeys(ownerUserId: string) {
+  const tenant = await tenantRepository.findByOwnerUserId(ownerUserId);
+  if (!tenant) throw httpError(404, 'not_found', 'tenant_not_found');
+  
+  return {
+    items: tenant.apiKeys.map((k: any) => ({
+      key_id: k.keyId,
+      name: k.name || 'Unnamed Key',
+      prefix: k.prefix || 'sk',
+      created_at: k.createdAt,
+      last_used: k.lastUsedAt,
+      status: k.revokedAt ? 'revoked' : 'active'
+    }))
+  };
+}
+
+export const tenantService = { me, createKey, revokeKey, createPublishable, listKeys };
