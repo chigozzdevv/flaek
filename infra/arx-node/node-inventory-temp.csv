@@ -1,0 +1,4 @@
+name,offset,ip,node_pubkey,callback_pubkey
+arx-node-a,81000001,35.193.40.242,EVyeKHRL34QB1GWxHmjfGwVKHaTCNvocc3pMw647oUM4,DNaNps68zo9VdbrCg3vm2PnaPGffG8Fqop23kw96g6bQ
+arx-node-b,81000002,34.67.218.38,74AAuNfxpx8RviFSzrwbCrVhU1Dsjpk4E6peALZQiRJc,HzAJgXqfZCzTEhJFR2f4mHZqzPWMqwYJyB5a52ZdVMuJ
+arx-node-c,81000003,34.121.115.28,H6vjjAKoa3BYRh1RMq55cRVSvzQDVVtDJ4BRv2MUdedg,B3dCFYTkPrX7UrGro7krVgNz6PA6Y1JrRSCU6rpRrcGa

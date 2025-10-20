@@ -1,0 +1,23 @@
+[
+  {
+    "name": "arx-node-a",
+    "offset": 81000001,
+    "region": "us-central1",
+    "zone": "us-central1-a",
+    "machine_type": "e2-standard-4"
+  },
+  {
+    "name": "arx-node-b",
+    "offset": 81000002,
+    "region": "us-central1",
+    "zone": "us-central1-a",
+    "machine_type": "e2-standard-4"
+  },
+  {
+    "name": "arx-node-c",
+    "offset": 81000003,
+    "region": "us-central1",
+    "zone": "us-central1-a",
+    "machine_type": "e2-standard-4"
+  }
+]

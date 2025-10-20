@@ -1,113 +1,130 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Provision three ARX nodes on GCE end-to-end.
-# Creates (if missing): static IPs, firewall rule, VMs; then copies and runs bootstrap on each.
-
-# Inputs via env (edit/export before running):
-#   PROJECT                 (optional)  — defaults to current gcloud config project
-#   REGION                  (default: us-central1)
-#   ZONE                    (default: us-central1-a)
-#   MACHINE_TYPE            (default: e2-standard-4)
-#   HELIUS_API_KEY          (required)  — Devnet RPC key
-#   CLUSTER_OFFSET          (optional)  — numeric cluster offset (preferred)
-#   CLUSTER_PUBKEY          (optional)  — cluster account pubkey (fallback)
-#   NODE_OFFSET_A           (default: 71000001)
-#   NODE_OFFSET_B           (default: 71000002)
-#   NODE_OFFSET_C           (default: 71000003)
-#   ARX_NODE_A              (default: arx-node-a) — instance & address name
-#   ARX_NODE_B              (default: arx-node-b)
-#   ARX_NODE_C              (default: arx-node-c)
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/lib.sh"
 
 PROJECT=${PROJECT:-$(gcloud config get-value project 2>/dev/null || echo "")}
-REGION=${REGION:-us-central1}
-ZONE=${ZONE:-us-central1-a}
-MACHINE_TYPE=${MACHINE_TYPE:-e2-standard-4}
-
-# Try to source values from repo's .env if not provided (resolve path relative to script)
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-if git -C "$SCRIPT_DIR" rev-parse --show-toplevel >/dev/null 2>&1; then
-  REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel)"
-else
-  REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
-fi
-ENV_FILE="$REPO_ROOT/flaek-server/.env"
-
-env_get() {
-  local key="$1"
-  [[ -f "$ENV_FILE" ]] || return 1
-  # Grep exact key= line, ignore comments, take last occurrence, strip quotes
-  local line
-  line=$(grep -E "^${key}=" "$ENV_FILE" | tail -n1 | cut -d= -f2-)
-  # Trim surrounding quotes if present
-  line=${line%\r}
-  line=${line%\n}
-  line=${line#\'}; line=${line%\'}; line=${line#\"}; line=${line%\"}
-  printf '%s' "$line"
-}
-
-# Defaults from env file
-if [[ -f "$ENV_FILE" ]]; then
-  echo "Using env file: $ENV_FILE"
-fi
-SOLANA_RPC_URL_DEFAULT="$(env_get SOLANA_RPC_URL || true)"
-HELIUS_RPC_DEFAULT="$(env_get HELIUS_RPC || true)"
-ARCIUM_CLUSTER_PUBKEY_DEFAULT="$(env_get ARCIUM_CLUSTER_PUBKEY || true)"
-
-extract_api_key() {
-  # Extract api-key= from URL query
-  echo "$1" | sed -n 's/.*[?&]api-key=\([^&]*\).*/\1/p'
-}
-
-# Inputs with fallbacks
-HELIUS_API_KEY=${HELIUS_API_KEY:-}
-if [[ -z "$HELIUS_API_KEY" ]]; then
-  if [[ -n "$HELIUS_RPC_DEFAULT" ]]; then
-    HELIUS_API_KEY=$(extract_api_key "$HELIUS_RPC_DEFAULT")
-  elif [[ -n "$SOLANA_RPC_URL_DEFAULT" ]]; then
-    HELIUS_API_KEY=$(extract_api_key "$SOLANA_RPC_URL_DEFAULT")
-  fi
-fi
-
-CLUSTER_OFFSET=${CLUSTER_OFFSET:-}
-CLUSTER_PUBKEY=${CLUSTER_PUBKEY:-${ARCIUM_CLUSTER_PUBKEY_DEFAULT:-}}
-
-NODE_OFFSET_A=${NODE_OFFSET_A:-71000001}
-NODE_OFFSET_B=${NODE_OFFSET_B:-71000002}
-NODE_OFFSET_C=${NODE_OFFSET_C:-71000003}
-
-ARX_NODE_A=${ARX_NODE_A:-arx-node-a}
-ARX_NODE_B=${ARX_NODE_B:-arx-node-b}
-ARX_NODE_C=${ARX_NODE_C:-arx-node-c}
-
 if [[ -z "$PROJECT" ]]; then
   echo "PROJECT not set and no gcloud project configured. Run: gcloud init" >&2
   exit 1
 fi
 
+MANIFEST_PATH="${NODES_FILE:-$(resolve_manifest_path || true)}"
+if [[ -z "$MANIFEST_PATH" ]]; then
+  echo "Provide node manifest via NODES_FILE or create $SCRIPT_DIR/nodes.json" >&2
+  exit 1
+fi
+
+readarray -t NODE_ROWS < <(parse_nodes_manifest "$MANIFEST_PATH")
+if (( ${#NODE_ROWS[@]} == 0 )); then
+  echo "Manifest $MANIFEST_PATH does not contain any node definitions" >&2
+  exit 1
+fi
+
+DEFAULT_REGION=${REGION:-}
+DEFAULT_ZONE=${ZONE:-}
+DEFAULT_MACHINE=${MACHINE_TYPE:-e2-standard-4}
+
+HELIUS_API_KEY=${HELIUS_API_KEY:-$(extract_api_key "${HELIUS_RPC:-$(env_get HELIUS_RPC || true)}")}
 if [[ -z "$HELIUS_API_KEY" ]]; then
-  echo "HELIUS_API_KEY is required (not found in env or flaek-server/.env)" >&2
+  HELIUS_API_KEY=$(extract_api_key "${SOLANA_RPC_URL:-$(env_get SOLANA_RPC_URL || true)}")
+fi
+if [[ -z "$HELIUS_API_KEY" ]]; then
+  echo "HELIUS_API_KEY not provided and could not be derived from .env" >&2
   exit 1
 fi
 
+FUNDING_KEYPAIR=${FUNDING_KEYPAIR:-${SOLANA_KEYPAIR:-$HOME/.config/solana/id.json}}
+FUNDING_RPC_URL=${FUNDING_RPC_URL:-${SOLANA_RPC_URL:-$(env_get SOLANA_RPC_URL || true)}}
+if [[ -z "$FUNDING_RPC_URL" && -n "$HELIUS_API_KEY" ]]; then
+  FUNDING_RPC_URL="https://devnet.helius-rpc.com/?api-key=$HELIUS_API_KEY"
+fi
+NODE_FUND_SOL=${NODE_FUND_SOL:-0}
+CALLBACK_FUND_SOL=${CALLBACK_FUND_SOL:-0}
+
+CLUSTER_OFFSET=${CLUSTER_OFFSET:-${ARCIUM_CLUSTER_OFFSET:-$(env_get ARCIUM_CLUSTER_OFFSET || true)}}
+CLUSTER_PUBKEY=${CLUSTER_PUBKEY:-${ARCIUM_CLUSTER_PUBKEY:-$(env_get ARCIUM_CLUSTER_PUBKEY || true)}}
+
+if [[ -z "$CLUSTER_OFFSET" && -n "$CLUSTER_PUBKEY" ]]; then
+  CLUSTER_OFFSET=$(node -e "try{const {getClusterAccOffset}=require('@arcium-hq/client'); console.log(getClusterAccOffset('$CLUSTER_PUBKEY'))}catch(e){process.exit(1)}" 2>/dev/null || true)
+fi
 if [[ -z "$CLUSTER_OFFSET" ]]; then
-  if [[ -n "$CLUSTER_PUBKEY" ]]; then
-    echo "Your arcium CLI requires --cluster-offset (pubkey not supported)."
-    read -p "Enter numeric CLUSTER_OFFSET for $CLUSTER_PUBKEY: " CLUSTER_OFFSET
-    export CLUSTER_OFFSET
-  else
-    read -p "Enter numeric CLUSTER_OFFSET: " CLUSTER_OFFSET
-    export CLUSTER_OFFSET
+  echo "CLUSTER_OFFSET is required (set ARCIUM_CLUSTER_OFFSET or export CLUSTER_OFFSET)" >&2
+  exit 1
+fi
+
+echo "Using manifest: $MANIFEST_PATH"
+echo "Project: $PROJECT"
+echo "Cluster offset: $CLUSTER_OFFSET"
+
+declare -a NODE_ORDER=()
+declare -A NODE_OFFSET NODE_IP_NAME NODE_MACHINE NODE_ZONE NODE_REGION NODE_HOST_IP NODE_ADDRESS NODE_NODE_PK NODE_CALLBACK_PK
+
+is_positive() {
+  python3 - "$1" <<'PY'
+import decimal, sys
+try:
+    val = decimal.Decimal(sys.argv[1])
+except decimal.InvalidOperation:
+    sys.exit(1)
+sys.exit(0 if val > 0 else 1)
+PY
+}
+
+fund_account() {
+  local recipient="$1"
+  local amount="$2"
+  local label="$3"
+  if [[ -z "$recipient" ]]; then
+    return
   fi
-fi
-if [[ -z "$CLUSTER_OFFSET" ]]; then
-  echo "CLUSTER_OFFSET is required." >&2
-  exit 1
-fi
+  echo "    -> funding $label ($recipient) with ${amount} SOL"
+  if ! printf 'y\n' | solana transfer "$recipient" "$amount" --keypair "$FUNDING_KEYPAIR" --url "$FUNDING_RPC_URL" --allow-unfunded-recipient --no-wait >/dev/null 2>&1; then
+    echo "       funding $label failed" >&2
+  else
+    echo "       funded $label"
+  fi
+}
 
-echo "[0/7] Using project: $PROJECT | region: $REGION | zone: $ZONE"
+for ROW in "${NODE_ROWS[@]}"; do
+  IFS='|' read -r NAME OFFSET IP_NAME MACHINE ZONE REGION SSH_USER HOST_IP <<< "$ROW"
+  if [[ -z "$NAME" || -z "$OFFSET" ]]; then
+    echo "Invalid node entry in manifest: $ROW" >&2
+    exit 1
+  fi
+  if [[ -z "$REGION" ]]; then
+    if [[ -n "$DEFAULT_REGION" ]]; then
+      REGION="$DEFAULT_REGION"
+    elif [[ -n "$ZONE" ]]; then
+      REGION="${ZONE%-*}"
+    fi
+  fi
+  if [[ -z "$ZONE" ]]; then
+    if [[ -n "$DEFAULT_ZONE" ]]; then
+      ZONE="$DEFAULT_ZONE"
+    elif [[ -n "$REGION" ]]; then
+      ZONE="${REGION}-a"
+    fi
+  fi
+  if [[ -z "$REGION" || -z "$ZONE" ]]; then
+    echo "Missing zone/region for node $NAME (update manifest or set REGION/ZONE)" >&2
+    exit 1
+  fi
 
-echo "[0.5/7] Ensuring local SSH key exists (non-interactive)"
+  NODE_ORDER+=("$NAME")
+  NODE_OFFSET["$NAME"]="$OFFSET"
+  NODE_IP_NAME["$NAME"]="${IP_NAME:-$NAME}"
+  NODE_MACHINE["$NAME"]="${MACHINE:-$DEFAULT_MACHINE}"
+  NODE_ZONE["$NAME"]="$ZONE"
+  NODE_REGION["$NAME"]="$REGION"
+  NODE_HOST_IP["$NAME"]="$HOST_IP"
+  NODE_ADDRESS["$NAME"]=""
+  NODE_NODE_PK["$NAME"]=""
+  NODE_CALLBACK_PK["$NAME"]=""
+done
+
+echo "[0.5/7] Ensuring local SSH key exists"
 if [[ ! -f "$HOME/.ssh/google_compute_engine" || ! -f "$HOME/.ssh/google_compute_engine.pub" ]]; then
   mkdir -p "$HOME/.ssh" && chmod 700 "$HOME/.ssh"
   ssh-keygen -t rsa -b 4096 -f "$HOME/.ssh/google_compute_engine" -N "" -C "$USER@$(hostname)" >/dev/null
@@ -115,31 +132,29 @@ if [[ ! -f "$HOME/.ssh/google_compute_engine" || ! -f "$HOME/.ssh/google_compute
 fi
 gcloud compute config-ssh --quiet --project "$PROJECT" >/dev/null || true
 
-echo "[1/7] Ensure Compute Engine API is enabled (idempotent)"
+echo "[1/7] Enabling Compute Engine API"
 gcloud services enable compute.googleapis.com --project "$PROJECT" >/dev/null || true
 
-echo "[2/7] Ensure static IPs (addresses) exist"
+echo "[2/7] Ensuring static IPs"
 ensure_address() {
-  local NAME=$1
+  local NAME="$1"
+  local REGION="$2"
   if ! gcloud compute addresses describe "$NAME" --region "$REGION" --project "$PROJECT" >/dev/null 2>&1; then
-    echo "  - creating address: $NAME"
+    echo "  - creating address: $NAME ($REGION)"
     gcloud compute addresses create "$NAME" --region "$REGION" --project "$PROJECT" >/dev/null
   else
-    echo "  - address exists: $NAME"
+    echo "  - address exists: $NAME ($REGION)"
   fi
 }
-ensure_address "$ARX_NODE_A"
-ensure_address "$ARX_NODE_B"
-ensure_address "$ARX_NODE_C"
 
-IP_A=$(gcloud compute addresses describe "$ARX_NODE_A" --region "$REGION" --project "$PROJECT" --format='get(address)')
-IP_B=$(gcloud compute addresses describe "$ARX_NODE_B" --region "$REGION" --project "$PROJECT" --format='get(address)')
-IP_C=$(gcloud compute addresses describe "$ARX_NODE_C" --region "$REGION" --project "$PROJECT" --format='get(address)')
-echo "  - $ARX_NODE_A => $IP_A"
-echo "  - $ARX_NODE_B => $IP_B"
-echo "  - $ARX_NODE_C => $IP_C"
+for NAME in "${NODE_ORDER[@]}"; do
+  region="${NODE_REGION[$NAME]}"
+  ip_name="${NODE_IP_NAME[$NAME]}"
+  ensure_address "$ip_name" "$region"
+  NODE_ADDRESS["$NAME"]="$(gcloud compute addresses describe "$ip_name" --region "$region" --project "$PROJECT" --format='get(address)')"
+ done
 
-echo "[3/7] Ensure firewall rule for tcp:8080 (network tag: arx-node)"
+echo "[3/7] Ensuring firewall rule allow-arx-8080"
 if ! gcloud compute firewall-rules describe allow-arx-8080 --project "$PROJECT" >/dev/null 2>&1; then
   gcloud compute firewall-rules create allow-arx-8080 \
     --allow tcp:8080 \
@@ -151,200 +166,199 @@ else
   echo "  - firewall rule allow-arx-8080 exists"
 fi
 
-echo "[4/7] Ensure instances exist (Debian 12, $MACHINE_TYPE)"
-ensure_instance() {
-  local NAME=$1
-  local IP=$2
-  if ! gcloud compute instances describe "$NAME" --zone "$ZONE" --project "$PROJECT" >/dev/null 2>&1; then
-    echo "  - creating instance: $NAME ($IP)"
+IMAGE_FAMILY=${IMAGE_FAMILY:-ubuntu-2204-lts}
+IMAGE_PROJECT=${IMAGE_PROJECT:-ubuntu-os-cloud}
+
+echo "[4/7] Ensuring instances"
+for NAME in "${NODE_ORDER[@]}"; do
+  zone="${NODE_ZONE[$NAME]}"
+  machine="${NODE_MACHINE[$NAME]}"
+  address="${NODE_ADDRESS[$NAME]}"
+  if ! gcloud compute instances describe "$NAME" --zone "$zone" --project "$PROJECT" >/dev/null 2>&1; then
+    echo "  - creating instance: $NAME ($zone)"
     gcloud compute instances create "$NAME" \
-      --zone "$ZONE" \
-      --machine-type "$MACHINE_TYPE" \
-      --image-family debian-12 \
-      --image-project debian-cloud \
-      --address "$IP" \
+      --zone "$zone" \
+      --machine-type "$machine" \
+      --image-family "$IMAGE_FAMILY" \
+      --image-project "$IMAGE_PROJECT" \
+      --address "$address" \
       --tags arx-node \
       --project "$PROJECT" >/dev/null
   else
     echo "  - instance exists: $NAME"
   fi
-}
-ensure_instance "$ARX_NODE_A" "$IP_A"
-ensure_instance "$ARX_NODE_B" "$IP_B"
-ensure_instance "$ARX_NODE_C" "$IP_C"
+ done
 
-echo "[5/7] Copy bootstrap script to instances"
 SCRIPT_PATH="$SCRIPT_DIR/bootstrap_arx_node.sh"
 if [[ ! -f "$SCRIPT_PATH" ]]; then
-  echo "ERROR: Bootstrap script not found at: $SCRIPT_PATH" >&2
+  echo "bootstrap_arx_node.sh not found in $SCRIPT_DIR" >&2
   exit 1
 fi
-for NAME in "$ARX_NODE_A" "$ARX_NODE_B" "$ARX_NODE_C"; do
-  gcloud compute scp "$SCRIPT_PATH" "$NAME":~/ --zone "$ZONE" --project "$PROJECT" >/dev/null
+
+echo "[5/7] Uploading bootstrap script"
+wait_for_ssh() {
+  local NAME="$1"
+  local ZONE="$2"
+  local ATTEMPTS="${WAIT_SSH_ATTEMPTS:-30}"
+  local DELAY="${WAIT_SSH_DELAY:-10}"
+  local i=1
+  while (( i <= ATTEMPTS )); do
+    if gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --command 'true' >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "  - waiting for SSH on $NAME ($i/$ATTEMPTS)"
+    sleep "$DELAY"
+    ((i++))
+  done
+  return 1
+}
+
+scp_with_retry() {
+  local SRC="$1" DST_NAME="$2" ZONE="$3"
+  local ATTEMPTS="${SCP_ATTEMPTS:-5}"
+  local DELAY="${SCP_RETRY_DELAY:-5}"
+  local i=1
+  while (( i <= ATTEMPTS )); do
+    if gcloud compute scp "$SRC" "$DST_NAME":~/ --zone "$ZONE" --project "$PROJECT" >/dev/null 2>&1; then
+      return 0
+    fi
+    echo "  - scp retry to $DST_NAME ($i/$ATTEMPTS)"
+    sleep "$DELAY"
+    ((i++))
+  done
+  return 1
+}
+
+for NAME in "${NODE_ORDER[@]}"; do
+  zone="${NODE_ZONE[$NAME]}"
+  echo "  - ensuring SSH is ready: $NAME"
+  if ! wait_for_ssh "$NAME" "$zone"; then
+    echo "ERROR: SSH not ready for $NAME after waiting. You can increase WAIT_SSH_ATTEMPTS/WAIT_SSH_DELAY." >&2
+    exit 1
+  fi
+  echo "  - uploading bootstrap to $NAME"
+  if ! scp_with_retry "$SCRIPT_PATH" "$NAME" "$zone"; then
+    echo "ERROR: Failed to upload bootstrap script to $NAME after retries." >&2
+    exit 1
+  fi
+  # also upload shared helpers expected by bootstrap script
+  if ! scp_with_retry "$SCRIPT_DIR/lib.sh" "$NAME" "$zone"; then
+    echo "ERROR: Failed to upload lib.sh to $NAME after retries." >&2
+    exit 1
+  fi
 done
 
-echo "[6/7] Run bootstrap (prepare) on each instance to get addresses"
-run_bootstrap_prepare() {
-  local NAME=$1
-  local OFFSET=$2
-  local IP=$3
-
-  # Compose cluster export part
-  local CLUSTER_EXPORT
-  CLUSTER_EXPORT="export CLUSTER_OFFSET=$CLUSTER_OFFSET;"
-
-  echo "  - $NAME (offset=$OFFSET, ip=$IP)"
+run_bootstrap() {
+  local NAME="$1"
+  local MODE="$2"
+  local OFFSET="${NODE_OFFSET[$NAME]}"
+  local ZONE="${NODE_ZONE[$NAME]}"
+  local HOST_IP_VALUE="${NODE_HOST_IP[$NAME]}"
+  local ADDRESS="${NODE_ADDRESS[$NAME]}"
+  if [[ -z "$HOST_IP_VALUE" ]]; then
+    HOST_IP_VALUE="$ADDRESS"
+  fi
+  local CLUSTER_EXPORT="export CLUSTER_OFFSET=$CLUSTER_OFFSET;"
+  echo "    -> $NAME ($MODE)"
   gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --command "
-    export HELIUS_API_KEY=$HELIUS_API_KEY; 
+    export HELIUS_API_KEY=$HELIUS_API_KEY
     $CLUSTER_EXPORT
-    export NODE_OFFSET=$OFFSET; 
-    export HOST_IP=$IP; 
-    export BOOTSTRAP_MODE=prepare; 
+    export NODE_OFFSET=$OFFSET
+    export HOST_IP=$HOST_IP_VALUE
+    export BOOTSTRAP_MODE=$MODE
     bash ~/bootstrap_arx_node.sh
   " >/dev/null
 }
-run_bootstrap_prepare "$ARX_NODE_A" "$NODE_OFFSET_A" "$IP_A"
-run_bootstrap_prepare "$ARX_NODE_B" "$NODE_OFFSET_B" "$IP_B"
-run_bootstrap_prepare "$ARX_NODE_C" "$NODE_OFFSET_C" "$IP_C"
 
-echo "[6.5/7] Addresses for manual funding (Devnet):"
+echo "[6/7] Running bootstrap prepare"
+for NAME in "${NODE_ORDER[@]}"; do
+  run_bootstrap "$NAME" "prepare"
+ done
 
-fetch_pubkeys() {
-  local NAME=$1
-  gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --command '
-    export PATH=$HOME/.local/share/solana/install/active_release/bin:$HOME/.local/bin:$PATH
-    NODE=$(solana address --keypair node-keypair.json 2>/dev/null || true)
-    CALLBACK=$(solana address --keypair callback-kp.json 2>/dev/null || true)
-    echo "$NODE|$CALLBACK"
-  ' 2>/dev/null | tail -n1
+echo "[6.5/7] Collecting node keys"
+get_keys_with_retry() {
+  local NAME="$1" ZONE="$2"
+  local ATTEMPTS="${KEYS_ATTEMPTS:-10}"
+  local DELAY="${KEYS_DELAY:-6}"
+  local i=1 out="" NODE_PK="" CALLBACK_PK=""
+  while (( i <= ATTEMPTS )); do
+    out=$(gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --command '
+      export PATH=$HOME/.local/share/solana/install/active_release/bin:$HOME/.local/bin:$PATH
+      if command -v solana >/dev/null 2>&1; then
+        NODE=$(solana address --keypair node-keypair.json 2>/dev/null || true)
+        CALLBACK=$(solana address --keypair callback-kp.json 2>/dev/null || true)
+        printf "%s %s" "$NODE" "$CALLBACK"
+      else
+        printf " "
+      fi
+    ' 2>/dev/null || true)
+    NODE_PK=${out%% *}
+    CALLBACK_PK=${out#* }
+    if [[ -n "$NODE_PK" || -n "$CALLBACK_PK" ]]; then
+      printf '%s\n' "$NODE_PK|$CALLBACK_PK"
+      return 0
+    fi
+    echo "  - waiting for keys on $NAME ($i/$ATTEMPTS)"
+    sleep "$DELAY"
+    ((i++))
+  done
+  printf '%s\n' "|"
+  return 0
 }
 
-PK_A=$(fetch_pubkeys "$ARX_NODE_A")
-PK_B=$(fetch_pubkeys "$ARX_NODE_B")
-PK_C=$(fetch_pubkeys "$ARX_NODE_C")
+for NAME in "${NODE_ORDER[@]}"; do
+  zone="${NODE_ZONE[$NAME]}"
+  IFS='|' read -r NODE_PK CALLBACK_PK < <(get_keys_with_retry "$NAME" "$zone")
+  NODE_NODE_PK["$NAME"]="$NODE_PK"
+  NODE_CALLBACK_PK["$NAME"]="$CALLBACK_PK"
+done
 
-NA=${PK_A%%|*}; CA=${PK_A##*|}
-NB=${PK_B%%|*}; CB=${PK_B##*|}
-NC=${PK_C%%|*}; CC=${PK_C##*|}
-
-printf "\nProvide these to the cluster authority to invite your nodes:\n"
-printf "  - %s offset=%s ip=%s node_pubkey=%s callback_pubkey=%s\n" "$ARX_NODE_A" "$NODE_OFFSET_A" "$IP_A" "$NA" "$CA"
-printf "  - %s offset=%s ip=%s node_pubkey=%s callback_pubkey=%s\n" "$ARX_NODE_B" "$NODE_OFFSET_B" "$IP_B" "$NB" "$CB"
-printf "  - %s offset=%s ip=%s node_pubkey=%s callback_pubkey=%s\n" "$ARX_NODE_C" "$NODE_OFFSET_C" "$IP_C" "$NC" "$CC"
-
-printf "\nLocal funding helper (optional)\n"
-if command -v solana >/dev/null 2>&1; then
-  RPC="https://devnet.helius-rpc.com/?api-key=$HELIUS_API_KEY"
-  NODE_FUND=${NODE_FUND:-2}
-  CALLBACK_FUND=${CALLBACK_FUND:-2}
-  THRESH_NODE=${THRESH_NODE:-1.5}
-  THRESH_CALLBACK=${THRESH_CALLBACK:-1.5}
-
-  # Determine funding wallet
-  FUND_ARGS=()
-  if [[ -n "${FUND_KEYPAIR:-}" ]]; then
-    FUND_ADDR=$(solana address --keypair "$FUND_KEYPAIR" --url "$RPC" 2>/dev/null || true)
-    FUND_ARGS+=(--keypair "$FUND_KEYPAIR")
-  else
-    FUND_ADDR=$(solana address --url "$RPC" 2>/dev/null || true)
-  fi
-  if [[ -z "$FUND_ADDR" ]]; then
-    echo "  - Could not determine local Solana wallet address. Ensure Solana CLI is configured." >&2
-  else
-    echo "  - Fund this local wallet (2 airdrops recommended): $FUND_ADDR"
-    echo "    Example: solana airdrop 5 $FUND_ADDR -u devnet (repeat twice)"
-  fi
-
-  read -p $'Press Enter after funding the local wallet to distribute/top-up node addresses…' _
-
-  # Build solana command base
-  SOLANA_CMD=(solana --url "$RPC")
-  if (( ${#FUND_ARGS[@]} )); then SOLANA_CMD+=("${FUND_ARGS[@]}"); fi
-
-  sol_balance() { addr=$1; "${SOLANA_CMD[@]}" balance "$addr" 2>/dev/null | awk '{print $1}'; }
-
-  echo "Top-up logic: skip if balance >= threshold (node=${THRESH_NODE}, callback=${THRESH_CALLBACK})"
-  topup() {
-    local who=$1 addr=$2 target=$3 thresh=$4
-    if [[ -z "$addr" ]]; then return; fi
-    bal=$(sol_balance "$addr")
-    # If parsing fails, default to 0
-    [[ -z "$bal" ]] && bal=0
-    need=$(python3 - <<PY 2>/dev/null || echo 0
-t=$target
-b=$bal
-print(max(0.0, t-b))
-PY
-)
-    # Fallback if python3 absent: transfer full target
-    if ! [[ "$need" =~ ^[0-9] ]]; then need=$target; fi
-    cmp=$(awk -v b="$bal" -v th="$thresh" 'BEGIN{if (b+0>=th+0) print 1; else print 0;}')
-    if [[ "$cmp" == "1" ]]; then
-      echo "  - $who $addr has ${bal} SOL >= ${thresh}, skip"
-    else
-      echo "  - topping up $who $addr by ${need} SOL (target ${target})"
-      "${SOLANA_CMD[@]}" transfer "$addr" "$need" --allow-unfunded-recipient --no-wait || true
-    fi
-  }
-
-  echo "Evaluating and topping up balances…"
-  topup "node A"     "$NA" "$NODE_FUND"     "$THRESH_NODE"
-  topup "callback A" "$CA" "$CALLBACK_FUND" "$THRESH_CALLBACK"
-  topup "node B"     "$NB" "$NODE_FUND"     "$THRESH_NODE"
-  topup "callback B" "$CB" "$CALLBACK_FUND" "$THRESH_CALLBACK"
-  topup "node C"     "$NC" "$NODE_FUND"     "$THRESH_NODE"
-  topup "callback C" "$CC" "$CALLBACK_FUND" "$THRESH_CALLBACK"
-
-  echo "Submitted transfers (if any). Waiting a few seconds for confirmations…"
-  sleep 8
-else
-  echo "  - Solana CLI not found locally; skipping automated distribution."
-  echo "    You can fund addresses manually and then continue."
-  read -p $'\nAfter funding each node and callback address, press Enter to continue…' _
+funding_possible=true
+if [[ ! -f "$FUNDING_KEYPAIR" ]]; then
+  echo "Funding keypair $FUNDING_KEYPAIR not found; skipping funding step" >&2
+  funding_possible=false
+fi
+if [[ -z "$FUNDING_RPC_URL" ]]; then
+  echo "FUNDING_RPC_URL not provided; skipping funding step" >&2
+  funding_possible=false
 fi
 
-echo "[7/7] Finalizing nodes (init accounts, join cluster, start container)"
-run_bootstrap_finalize() {
-  local NAME=$1
-  local OFFSET=$2
-  local IP=$3
-
-  local CLUSTER_EXPORT
-  if [[ -n "$CLUSTER_OFFSET" ]]; then
-    CLUSTER_EXPORT="export CLUSTER_OFFSET=$CLUSTER_OFFSET;"
-  else
-    CLUSTER_EXPORT="export CLUSTER_PUBKEY=$CLUSTER_PUBKEY;"
+if $funding_possible && command -v solana >/dev/null 2>&1; then
+  node_fund=false
+  callback_fund=false
+  if is_positive "$NODE_FUND_SOL"; then node_fund=true; fi
+  if is_positive "$CALLBACK_FUND_SOL"; then callback_fund=true; fi
+  if $node_fund || $callback_fund; then
+    echo "[6.75/7] Funding node accounts"
+    for NAME in "${NODE_ORDER[@]}"; do
+      if $node_fund; then
+        fund_account "${NODE_NODE_PK[$NAME]}" "$NODE_FUND_SOL" "${NAME} node"
+      fi
+      if $callback_fund; then
+        fund_account "${NODE_CALLBACK_PK[$NAME]}" "$CALLBACK_FUND_SOL" "${NAME} callback"
+      fi
+    done
   fi
+fi
 
-  gcloud compute ssh "$NAME" --zone "$ZONE" --project "$PROJECT" --command "
-    set -e; 
-    export PATH=\$HOME/.cargo/bin:\$HOME/.local/bin:/usr/local/bin:\$PATH; 
-    # Ensure Docker running for arcup
-    sudo systemctl enable --now docker >/dev/null 2>&1 || sudo service docker start >/dev/null 2>&1 || true; 
-    for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do sudo docker info >/dev/null 2>&1 && break; sleep 2; done; 
-    # Try installing arcium via arcup and ensure it's linked into /usr/local/bin
-    if command -v arcup >/dev/null 2>&1 || [ -x \"\$HOME/.local/bin/arcup\" ] || [ -x \"\$HOME/.cargo/bin/arcup\" ]; then 
-      arcup install || true; 
-      sudo -E env PATH=\"\$HOME/.cargo/bin:\$HOME/.local/bin:/usr/local/bin:\$PATH\" arcup install || true; 
-    fi; 
-    ARCIUM_BIN=\"\$(sudo env PATH=\"\$HOME/.cargo/bin:\$HOME/.local/bin:/usr/local/bin:/usr/bin:/bin:/root/.local/bin:/root/.cargo/bin\" which arcium 2>/dev/null || true)\"; 
-    if [ -z \"\$ARCIUM_BIN\" ]; then ARCIUM_BIN=\"\$(sudo find /usr/local/bin /usr/bin /root/.local/bin /root/.cargo/bin -maxdepth 2 -type f -name arcium 2>/dev/null | head -n1)\"; fi; 
-    if [ -n \"\$ARCIUM_BIN\" ]; then sudo install -m 0755 \"\$ARCIUM_BIN\" /usr/local/bin/arcium || true; fi; 
-    export HELIUS_API_KEY=$HELIUS_API_KEY; 
-    $CLUSTER_EXPORT
-    export NODE_OFFSET=$OFFSET; 
-    export HOST_IP=$IP; 
-    export BOOTSTRAP_MODE=finalize; 
-    bash ~/bootstrap_arx_node.sh
-  " >/dev/null
-}
+echo "[7/7] Running bootstrap finalize"
+for NAME in "${NODE_ORDER[@]}"; do
+  run_bootstrap "$NAME" "finalize"
+ done
 
-run_bootstrap_finalize "$ARX_NODE_A" "$NODE_OFFSET_A" "$IP_A"
-run_bootstrap_finalize "$ARX_NODE_B" "$NODE_OFFSET_B" "$IP_B"
-run_bootstrap_finalize "$ARX_NODE_C" "$NODE_OFFSET_C" "$IP_C"
+SUMMARY_PATH=${NODES_SUMMARY:-"$SCRIPT_DIR/node-inventory.csv"}
+{
+  echo "name,offset,ip,node_pubkey,callback_pubkey"
+  for NAME in "${NODE_ORDER[@]}"; do
+    printf "%s,%s,%s,%s,%s\n" \
+      "$NAME" \
+      "${NODE_OFFSET[$NAME]}" \
+      "${NODE_ADDRESS[$NAME]}" \
+      "${NODE_NODE_PK[$NAME]}" \
+      "${NODE_CALLBACK_PK[$NAME]}"
+  done
+} > "$SUMMARY_PATH"
 
-echo "\nQuick health checks (manual on each VM):"
-echo "  - arcium arx-info  <OFFSET> --rpc-url \"https://devnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY\""
-echo "  - arcium arx-active <OFFSET> --rpc-url \"https://devnet.helius-rpc.com/?api-key=YOUR_HELIUS_API_KEY\""
-
-echo "Done. Submit a job from Flaek Playground to verify finalization."
+echo
+printf "Node summary written to %s\n" "$SUMMARY_PATH"
+echo "Invite and approve these offsets against cluster $CLUSTER_OFFSET before queuing computations."

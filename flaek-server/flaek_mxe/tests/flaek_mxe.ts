@@ -48,21 +48,21 @@ describe("FlaekMxe", () => {
     return event;
   };
 
-  const CLUSTER_OFFSET = 1078779259;
+  const CLUSTER_OFFSET = 933394941; // Your custom cluster
   const clusterAccount = getClusterAccAddress(CLUSTER_OFFSET);
 
   it("Is initialized!", async () => {
     const owner = readKpJson(`${os.homedir()}/.config/solana/id.json`);
 
-    console.log("Initializing add together computation definition");
-    const initATSig = await initAddTogetherCompDef(
+    console.log("Initializing add computation definition");
+    const initATSig = await initAddCompDef(
       program,
       owner,
       false,
       false
     );
     console.log(
-      "Add together computation definition initialized with signature",
+      "Add computation definition initialized with signature",
       initATSig
     );
 
@@ -86,11 +86,11 @@ describe("FlaekMxe", () => {
     const nonce = randomBytes(16);
     const ciphertext = cipher.encrypt(plaintext, nonce);
 
-    const sumEventPromise = awaitEvent("sumEvent");
+    const addEventPromise = awaitEvent("addEvent");
     const computationOffset = new anchor.BN(randomBytes(8), "hex");
 
     const queueSig = await program.methods
-      .addTogether(
+      .add(
         computationOffset,
         Array.from(ciphertext[0]),
         Array.from(ciphertext[1]),
@@ -108,7 +108,7 @@ describe("FlaekMxe", () => {
         executingPool: getExecutingPoolAccAddress(program.programId),
         compDefAccount: getCompDefAccAddress(
           program.programId,
-          Buffer.from(getCompDefAccOffset("add_together")).readUInt32LE()
+          Buffer.from(getCompDefAccOffset("add")).readUInt32LE()
         ),
       })
       .rpc({ skipPreflight: true, commitment: "confirmed" });
@@ -122,12 +122,12 @@ describe("FlaekMxe", () => {
     );
     console.log("Finalize sig is ", finalizeSig);
 
-    const sumEvent = await sumEventPromise;
-    const decrypted = cipher.decrypt([sumEvent.sum], new Uint8Array(sumEvent.nonce))[0];
+    const addEvent = await addEventPromise;
+    const decrypted = cipher.decrypt([addEvent.result], new Uint8Array(addEvent.nonce))[0];
     expect(decrypted).to.equal(val1 + val2);
   });
 
-  async function initAddTogetherCompDef(
+  async function initAddCompDef(
     program: Program<FlaekMxe>,
     owner: anchor.web3.Keypair,
     uploadRawCircuit: boolean,
@@ -136,7 +136,7 @@ describe("FlaekMxe", () => {
     const baseSeedCompDefAcc = getArciumAccountBaseSeed(
       "ComputationDefinitionAccount"
     );
-    const offset = getCompDefAccOffset("add_together");
+    const offset = getCompDefAccOffset("add");
 
     const compDefPDA = PublicKey.findProgramAddressSync(
       [baseSeedCompDefAcc, program.programId.toBuffer(), offset],
@@ -146,7 +146,7 @@ describe("FlaekMxe", () => {
     console.log("Comp def pda is ", compDefPDA);
 
     const sig = await program.methods
-      .initAddTogetherCompDef()
+      .initAddCompDef()
       .accounts({
         compDefAccount: compDefPDA,
         payer: owner.publicKey,
@@ -156,14 +156,14 @@ describe("FlaekMxe", () => {
       .rpc({
         commitment: "confirmed",
       });
-    console.log("Init add together computation definition transaction", sig);
+    console.log("Init add computation definition transaction", sig);
 
     if (uploadRawCircuit) {
-      const rawCircuit = fs.readFileSync("build/add_together.arcis");
+      const rawCircuit = fs.readFileSync("build/add.arcis");
 
       await uploadCircuit(
         provider as anchor.AnchorProvider,
-        "add_together",
+        "add",
         program.programId,
         rawCircuit,
         true

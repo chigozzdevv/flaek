@@ -9,15 +9,73 @@ set -euo pipefail
 #   CLUSTER_PUBKEY         (optional) — cluster account pubkey (fallback if CLI supports it)
 #   SOLANA_VERSION         (optional) — default v1.18.18
 
-HELIUS_API_KEY=${HELIUS_API_KEY:-}
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$SCRIPT_DIR/lib.sh"
+
+MANIFEST_PATH="$(resolve_manifest_path || true)"
+
+HELIUS_API_KEY=${HELIUS_API_KEY:-$(extract_api_key "${HELIUS_RPC:-$(env_get HELIUS_RPC || true)}")}
+if [[ -z "$HELIUS_API_KEY" ]]; then
+  HELIUS_API_KEY=$(extract_api_key "${SOLANA_RPC_URL:-$(env_get SOLANA_RPC_URL || true)}")
+fi
+
 NODE_OFFSET=${NODE_OFFSET:-}
 HOST_IP=${HOST_IP:-}
-CLUSTER_OFFSET=${CLUSTER_OFFSET:-}
-CLUSTER_PUBKEY=${CLUSTER_PUBKEY:-}
+CLUSTER_OFFSET=${CLUSTER_OFFSET:-${ARCIUM_CLUSTER_OFFSET:-$(env_get ARCIUM_CLUSTER_OFFSET || true)}}
+CLUSTER_PUBKEY=${CLUSTER_PUBKEY:-${ARCIUM_CLUSTER_PUBKEY:-$(env_get ARCIUM_CLUSTER_PUBKEY || true)}}
 SOLANA_VERSION=${SOLANA_VERSION:-v1.18.18}
 
-if [[ -z "$HELIUS_API_KEY" || -z "$NODE_OFFSET" || -z "$HOST_IP" ]]; then
-  echo "Missing required env: HELIUS_API_KEY, NODE_OFFSET, HOST_IP" >&2
+if [[ -z "$HELIUS_API_KEY" ]]; then
+  echo "Missing HELIUS_API_KEY (set env or ensure SOLANA_RPC_URL/HELIUS_RPC in .env)" >&2
+  exit 1
+fi
+
+if [[ -z "$NODE_OFFSET" ]]; then
+  if [[ -n "$MANIFEST_PATH" ]]; then
+    # Assign first unused offset from manifest
+    NODE_OFFSET=$(
+      python3 - "$MANIFEST_PATH" <<'PY'
+import json, sys
+path = sys.argv[1]
+with open(path, 'r', encoding='utf-8') as f:
+    entries = json.load(f)
+for entry in entries:
+    name = entry.get('name')
+    offset = entry.get('offset')
+    if not name or offset is None:
+        continue
+    # mark file to avoid reuse
+    flag = f"/tmp/arx-node-{offset}.claimed"
+    try:
+        with open(flag, 'x'):
+            pass
+        print(offset)
+        break
+    except FileExistsError:
+        continue
+PY
+    )
+  fi
+  if [[ -z "$NODE_OFFSET" ]]; then
+    echo "Missing NODE_OFFSET (set env or provide in manifest)" >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "$HOST_IP" ]]; then
+  HOST_IP=$(curl -fsS https://api.ipify.org || true)
+  if [[ -z "$HOST_IP" ]]; then
+    echo "Unable to determine HOST_IP automatically; set HOST_IP." >&2
+    exit 1
+  fi
+fi
+
+if [[ -z "$CLUSTER_OFFSET" && -n "$CLUSTER_PUBKEY" ]]; then
+  CLUSTER_OFFSET=$(node -e "try{const {getClusterAccOffset}=require('@arcium-hq/client'); console.log(getClusterAccOffset('$CLUSTER_PUBKEY'))}catch(e){process.exit(1)}" 2>/dev/null || true)
+fi
+
+if [[ -z "$CLUSTER_OFFSET" ]]; then
+  echo "CLUSTER_OFFSET is required (set ARCIUM_CLUSTER_OFFSET or export CLUSTER_OFFSET)." >&2
   exit 1
 fi
 
@@ -26,37 +84,79 @@ RPC_WSS="wss://devnet.helius-rpc.com/?api-key=${HELIUS_API_KEY}"
 
 export DEBIAN_FRONTEND=noninteractive
 echo "[1/9] Update apt and install prerequisites"
-sudo apt-get update -y
-sudo apt-get install -y ca-certificates curl gnupg lsb-release openssl git apt-transport-https
+sudo -E apt-get update -y
+sudo -E apt-get install -y ca-certificates curl gnupg lsb-release openssl git apt-transport-https
 
 echo "[2/9] Install Docker Engine + compose"
-if ! command -v docker >/dev/null 2>&1; then
-  sudo install -m 0755 -d /etc/apt/keyrings
-  curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-  sudo chmod a+r /etc/apt/keyrings/docker.gpg
-  echo \
-    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian \
-    $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-    sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-  sudo apt-get update -y
-  sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-fi
 
-echo "[2.1/9] Enable and start Docker"
-sudo systemctl daemon-reload || true
-sudo systemctl enable --now docker || sudo service docker start || true
-# wait for docker daemon up
-for i in {1..20}; do
-  if sudo docker info >/dev/null 2>&1; then
-    break
+docker_ready() {
+  # wait up to 180s for docker to become responsive
+  for i in {1..60}; do
+    if sudo docker info >/dev/null 2>&1; then
+      echo "  - Docker daemon is ready"
+      return 0
+    fi
+    echo "  - waiting for docker daemon... ($i/60)"
+    sleep 3
+  done
+  return 1
+}
+
+ensure_docker() {
+  if command -v docker >/dev/null 2>&1; then
+    # try to start and wait
+    sudo systemctl daemon-reload || true
+    sudo systemctl enable docker || true
+    sudo systemctl start docker || sudo service docker start || true
+    docker_ready && return 0
+    echo "  - docker installed but not responding; attempting restart"
+    sudo systemctl restart docker || true
+    docker_ready && return 0
+    echo "  - docker still not responding; will reinstall via official get.docker.com"
   fi
-  echo "  - waiting for docker daemon... ($i/20)"
-  sleep 2
-done
-if ! sudo docker info >/dev/null 2>&1; then
-  echo "Docker daemon is not responding after wait. Exiting." >&2
-  exit 1
-fi
+
+  # Install repo + packages (Ubuntu/Debian)
+  sudo install -m 0755 -d /etc/apt/keyrings
+  . /etc/os-release
+  DIST_ID=${ID:-debian}
+  CODENAME=${VERSION_CODENAME:-bookworm}
+  case "$DIST_ID" in
+    ubuntu)
+      curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $CODENAME stable" | \
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      ;;
+    *)
+      curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+      echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/debian $CODENAME stable" | \
+        sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+      ;;
+  esac
+  sudo chmod a+r /etc/apt/keyrings/docker.gpg
+  sudo -E apt-get update -y
+  sudo -E apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin || true
+
+  # Enable and start
+  sudo systemctl daemon-reload || true
+  sudo systemctl enable docker || true
+  sudo systemctl start docker || sudo service docker start || true
+  if docker_ready; then return 0; fi
+
+  # Fallback: docker convenience script
+  echo "  - Falling back to get.docker.com convenience script"
+  curl -fsSL https://get.docker.com | sh
+  sudo systemctl enable docker || true
+  sudo systemctl start docker || true
+  if ! docker_ready; then
+    echo "Docker daemon is not responding. Please ensure Docker is running." >&2
+    # Print diagnostics
+    (sudo systemctl status docker || true) | tail -n 50 >&2
+    (sudo journalctl -u docker --no-pager | tail -n 200) >&2 || true
+    exit 1
+  fi
+}
+
+ensure_docker
 
 if [[ "${BOOTSTRAP_MODE:-full}" != "prepare" ]]; then
 echo "[3/9] Install Arcium tooling via arcup (non-interactive)"
@@ -163,25 +263,39 @@ if [[ "$BOOTSTRAP_MODE" == "prepare" ]]; then
   exit 0
 fi
 
-echo "[7/9] Initialize ARX accounts onchain"
+echo "[7/9] Ensure ARX accounts exist (init if needed)"
+INIT_LOG=/tmp/init-arx-accs-$NODE_OFFSET.log
+set +e
 "$ARCIUM_BIN" init-arx-accs \
   --keypair-path node-keypair.json \
   --callback-keypair-path callback-kp.json \
   --peer-keypair-path identity.pem \
   --node-offset "$NODE_OFFSET" \
   --ip-address "$HOST_IP" \
-  --rpc-url "$RPC_HTTP"
+  --rpc-url "$RPC_HTTP" 2>&1 | tee "$INIT_LOG"
+INIT_RC=${PIPESTATUS[0]}
+set -e
+if [[ $INIT_RC -eq 0 ]]; then
+  echo "  - ARX accounts initialized"
+else
+  if grep -Ei "(already|exists|initialized)" "$INIT_LOG" >/dev/null 2>&1; then
+    echo "  - Accounts already initialized (ok)"
+  else
+    echo "  - init-arx-accs failed (see $INIT_LOG)" >&2
+    exit 1
+  fi
+fi
 
 echo "[8/9] Join cluster (with invite polling)"
 JOIN_MAX_ATTEMPTS=${JOIN_MAX_ATTEMPTS:-40}      # ~20 minutes at 30s interval
 JOIN_RETRY_DELAY=${JOIN_RETRY_DELAY:-30}
 
 join_attempt() {
-  local EXTRA="$1"  # either --cluster-offset <x> or --cluster-pubkey <pk>
+  # Node acceptance of invite (per docs)
   "$ARCIUM_BIN" join-cluster true \
     --keypair-path node-keypair.json \
     --node-offset "$NODE_OFFSET" \
-    $EXTRA \
+    "$@" \
     --rpc-url "$RPC_HTTP"
 }
 
@@ -209,6 +323,8 @@ else
 fi
 
 echo "[9/9] Write config and start container"
+# Ensure docker is healthy again before starting container (covers long gaps between steps)
+ensure_docker
 cat > node-config.toml <<EOF
 [node]
 offset = ${NODE_OFFSET}

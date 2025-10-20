@@ -1,19 +1,90 @@
-ARX Node on GCE — 3‑node setup (Devnet)
+ARX Node on GCE — manifest-driven setup (Devnet)
 
-This folder contains a complete, repeatable way to spin up three ARX nodes on Google Compute Engine and join your existing cluster so computations finalize.
+This folder contains scripts to provision one or more ARX nodes on Google Compute Engine using a JSON manifest and the shared helpers in `lib.sh`.
 
-What you get
-- `bootstrap_arx_node.sh` — one script that installs Docker + Arcium CLI, generates/funds keys, initializes on‑chain node accounts, joins your cluster, writes config, and starts the container (using `docker run`).
-- `node-config.template.toml` — TOML template for reference only. The script writes the actual config per node.
-- `docker-compose.yml` — optional. Not required; provided only if you prefer compose.
- - `provision_all.sh` — one-shot orchestrator that uses your repo .env to avoid placeholders.
+Tools provided
+- `bootstrap_arx_node.sh` — installs Docker and Arcium tooling on a VM, initializes node accounts, and starts the `arcium/arx-node` container.
+- `provision_all.sh` — orchestrates VM creation, bootstrapping, and summary output based on a manifest (`nodes.json`).
+- `cluster-nodes.sh` — invite/approve helper that reads the generated node inventory.
+- `create-new-cluster.sh` — helper to create a new cluster (unchanged).
+- `nodes.sample.json` — example manifest for three nodes.
 
-Prerequisites
-- gcloud CLI initialized for project (you already did this).
-- 3 static IPs reserved (you already created `arx-node-a/b/c`).
-- Firewall rule allowing `tcp:8080` for tag `arx-node` (done).
-- A Devnet RPC API key (e.g., Helius). Set `HELIUS_API_KEY`.
-- Your Arcium cluster identifier: either `CLUSTER_OFFSET` (preferred) or `CLUSTER_PUBKEY`.
+📁 Manifest (`nodes.json`)
+```json
+[
+  { "name": "arx-node-a", "offset": 81000001, "region": "us-central1", "zone": "us-central1-a", "machine_type": "e2-standard-4" },
+  { "name": "arx-node-b", "offset": 81000002, "region": "us-central1", "zone": "us-central1-a", "machine_type": "e2-standard-4" },
+  { "name": "arx-node-c", "offset": 81000003, "region": "us-central1", "zone": "us-central1-a", "machine_type": "e2-standard-4" }
+]
+```
+
+📋 Prerequisites
+- gcloud CLI configured for your project
+- Static IPs reserved per node or let the script create/verify them (`ip_name` defaults to the node name)
+- Firewall rule allowing `tcp:8080` tagged `arx-node`
+- `HELIUS_API_KEY` (or `SOLANA_RPC_URL` containing an api-key query param)
+- `ARCIUM_CLUSTER_OFFSET` (preferred) in `.env` or exported
+
+🚀 Provision all nodes
+```bash
+export PROJECT=your-gcp-project
+export REGION=us-central1      # optional default
+export ZONE=us-central1-a      # optional default
+export NODES_FILE=infra/arx-node/nodes.json  # optional if using default path
+export HELIUS_API_KEY=...      # optional if derived from .env
+export CLUSTER_OFFSET=933394941
+
+bash infra/arx-node/provision_all.sh
+```
+
+This will:
+1. Ensure required IP addresses and firewall rules exist
+2. Create/verify instances per manifest entry
+3. Upload `bootstrap_arx_node.sh`
+4. Run bootstrap in `prepare` (key generation) and `finalize` modes
+5. Write `infra/arx-node/node-inventory.csv` with offsets, IPs, and generated pubkeys
+
+🧠 Cluster invitations
+Use `cluster-nodes.sh` to manage cluster membership:
+```bash
+# list discovered nodes
+infra/arx-node/cluster-nodes.sh list
+
+# invite nodes (cluster authority keypair) - uses 'propose-join-cluster' CLI command
+infra/arx-node/cluster-nodes.sh invite --yes
+
+# Note: 'approve' command is deprecated. The 2-step process is now:
+# 1. Cluster authority proposes nodes (via 'invite' above)
+# 2. Nodes accept the proposal (this happens automatically in bootstrap script via 'join-cluster true')
+```
+
+🛠️ Manual bootstrap (single node)
+```bash
+gcloud compute ssh arx-node-a --zone us-central1-a --command '
+  export HELIUS_API_KEY=...
+  export CLUSTER_OFFSET=933394941
+  export NODE_OFFSET=81000001
+  export HOST_IP=$(curl -s https://api.ipify.org)
+  bash ~/bootstrap_arx_node.sh
+'
+```
+
+🩺 Health checks
+```bash
+RPC=https://devnet.helius-rpc.com/?api-key=$HELIUS_API_KEY
+arcium arx-info  81000001 --rpc-url "$RPC"
+arcium arx-active 81000001 --rpc-url "$RPC"
+```
+
+📄 Outputs
+`provision_all.sh` emits `node-inventory.csv` for reference:
+```
+name,offset,ip,node_pubkey,callback_pubkey
+arx-node-a,81000001,34.123.45.67,H...,C...
+...
+```
+
+Cluster authority uses those pubkeys with `cluster-nodes.sh invite/approve`.
 
 1) Create the 3 VMs (uses your reserved IPs)
 
@@ -102,13 +173,12 @@ gcloud compute ssh arx-node-c --zone "$ZONE" --command '
 ```
 
 What the bootstrap does
-- Installs Docker Engine + compose plugin
+- Installs Docker Engine + compose plugin (Ubuntu/Debian)
 - Installs Arcium tooling via arcup (`arcium` CLI)
 - Installs Solana CLI (used for key gen and airdrops)
 - Generates keys if missing: `node-keypair.json`, `callback-kp.json`, `identity.pem`
-- Airdrops Devnet SOL to node + callback authorities
 - Initializes ARX accounts onchain with your `NODE_OFFSET` and `HOST_IP`
-- Joins your cluster (by `CLUSTER_OFFSET` or `CLUSTER_PUBKEY`)
+- Joins your cluster (by `CLUSTER_OFFSET`)
 - Writes `node-config.toml`
 - Starts the `arcium/arx-node` container with `docker run` and tails logs
 
@@ -125,7 +195,7 @@ arcium arx-active 71000003 --rpc-url "$RPC"
 
 Notes
 - If your cluster enforces invitations, the cluster authority must issue invites before `join-cluster` will succeed. Then the bootstrap’s `join-cluster true` will accept them.
-- If you only know the cluster account pubkey (e.g. `CaTxK…`), set `CLUSTER_PUBKEY`. If you know the numeric offset, set `CLUSTER_OFFSET` (preferred and supported by all CLI versions).
+- Use `CLUSTER_OFFSET` (preferred by current CLI). `CLUSTER_PUBKEY` is shown only for compatibility.
 - If Devnet airdrop throttles, re-run the bootstrap; it’s idempotent.
 - Port `8080` is exposed via the `arx-node` network tag you already allowed.
 

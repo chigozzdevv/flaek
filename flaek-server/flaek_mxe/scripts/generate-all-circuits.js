@@ -346,7 +346,7 @@ pub enum ErrorCode {
   console.log(`  - Account structs: ${accountCode.split('\n').length} lines`);
   console.log('\nNext steps:');
   console.log('1. Run: arcium build');
-  console.log('2. Run: arcium deploy --cluster-offset 1078779259 --keypair-path ~/.config/solana/id.json -u d --skip-init');
+  console.log('2. Run: arcium deploy --cluster-offset 933394941 --keypair-path ~/.config/solana/id.json -u d --skip-init');
   console.log('3. Run: ANCHOR_PROVIDER_URL=https://api.devnet.solana.com ANCHOR_WALLET=~/.config/solana/id.json yarn ts-node scripts/init-all-circuits.ts');
 }
 

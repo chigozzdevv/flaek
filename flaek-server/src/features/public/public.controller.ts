@@ -19,9 +19,28 @@ async function getMxePublicKey(req: Request, res: Response) {
     const connection = new Connection(rpc, 'confirmed');
     const provider = { connection } as any;
     const mxePk = new PublicKey(programId);
-    const mxePublicKey = await getMXEPublicKey(provider, mxePk);
-    if (!mxePublicKey) return res.status(404).json({ code: 'not_found', message: 'mxe_public_key_not_found' });
-    return res.json({ public_key: Array.from(mxePublicKey) });
+    let mxePublicKey: Uint8Array | null = null;
+    const maxRetries = 12; // up to ~5s with 400ms delay
+    const retryDelayMs = 400;
+
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        const key = await getMXEPublicKey(provider, mxePk);
+        if (key && key.length === 32) {
+          mxePublicKey = key;
+          break;
+        }
+      } catch (_) {
+        // ignore and retry
+      }
+      if (attempt < maxRetries) await new Promise(r => setTimeout(r, retryDelayMs));
+    }
+
+    if (!mxePublicKey) {
+      return res.status(409).json({ code: 'mxe_keys_not_published', message: 'MXE x25519 public key not yet published on-chain. Wait for DKG to complete.' });
+    }
+
+    return res.json({ source: 'onchain', public_key: Array.from(mxePublicKey) });
   } catch (e: any) {
     return res.status(500).json({ code: 'server_error', message: e.message || 'failed_to_get_mxe_public_key' });
   }

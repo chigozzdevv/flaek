@@ -31,7 +31,7 @@ const COMP_DEF_OFFSET_VOTE_TALLY: u32 = comp_def_offset("vote_tally");
 const COMP_DEF_OFFSET_MEETS_THRESHOLD: u32 = comp_def_offset("meets_threshold");
 const COMP_DEF_OFFSET_WEIGHTED_AVERAGE: u32 = comp_def_offset("weighted_average");
 
-declare_id!("F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6");
+declare_id!("AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7");
 
 #[arcium_program]
 pub mod flaek_mxe {

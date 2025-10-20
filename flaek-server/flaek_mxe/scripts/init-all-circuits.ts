@@ -68,6 +68,8 @@ async function initializeCircuit(
         compDefAccount: compDefPDA,
         payer: owner.publicKey,
         mxeAccount: getMXEAccAddress(program.programId),
+        arciumProgram: getArciumProgAddress(),
+        systemProgram: anchor.web3.SystemProgram.programId,
       })
       .signers([owner])
       .rpc({

@@ -30,7 +30,9 @@ export class ArciumClient {
   async submit(req: ArciumJobRequest): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
     const programId = new PublicKey(req.programId);
     const mxeProgramId = new PublicKey(req.mxeProgramId);
-    const program = new (anchor as any).Program(req.idl as any, programId, this.provider);
+    // Anchor >=0.28 expects the program address inside the IDL and a provider as the 2nd arg
+    const opIdl = { ...(req.idl as any), address: programId.toBase58() };
+    const program = new (anchor as any).Program(opIdl, this.provider);
 
     const mxePublicKey = await getMXEPublicKey(this.provider as any, mxeProgramId);
     if (!mxePublicKey) throw new Error('MXE public key not set for the given MXE program');
@@ -102,37 +104,18 @@ export class ArciumClient {
     console.log('[Arcium Client] IDL loaded, program name:', idl.metadata?.name);
 
     console.log('[Arcium Client] Creating MXE program...');
-    const mxeProgram = new (anchor as any).Program(idl, provider);
+    // Ensure IDL contains the correct address and pass provider only (per new Anchor API)
+    const idlWithAddr = { ...idl, address: mxeProgramId.toBase58() };
+    const mxeProgram = new (anchor as any).Program(idlWithAddr, provider);
+    const idlAddr = idl.address || idl?.metadata?.address;
+    if (idlAddr && idlAddr !== mxeProgramId.toBase58()) {
+      console.warn('[Arcium Client] Warning: IDL program address differs from requested MXE program ID:', { idlAddr, mxeProgramId: mxeProgramId.toBase58() });
+    }
     console.log('[Arcium Client] MXE program created');
 
-    console.log('[Arcium Client] Getting MXE public key for:', mxeProgramId.toBase58());
-    let mxePublicKey: Uint8Array | null = null;
-    const maxRetries = 10;
-    const retryDelayMs = 500;
-
-    for (let attempt = 1; attempt <= maxRetries; attempt++) {
-      try {
-        console.log(`[Arcium Client] Calling getMXEPublicKey (attempt ${attempt}/${maxRetries})...`);
-        mxePublicKey = await getMXEPublicKey(provider as any, mxeProgramId);
-        if (mxePublicKey) {
-          console.log('[Arcium Client] getMXEPublicKey returned:', `${mxePublicKey.length} bytes`);
-          break;
-        }
-      } catch (err: any) {
-        console.error(`[Arcium Client] Attempt ${attempt} failed to get MXE public key:`, err.message);
-        if (attempt < maxRetries) {
-          console.log(`[Arcium Client] Retrying in ${retryDelayMs}ms... (attempt ${attempt}/${maxRetries})`);
-          await new Promise(resolve => setTimeout(resolve, retryDelayMs));
-        } else {
-          throw new Error(`Failed to get MXE public key after ${maxRetries} attempts: ${err.message}`);
-        }
-      }
-    }
-
-    if (!mxePublicKey) {
-      throw new Error('MXE public key not set for the given MXE program');
-    }
-    console.log('[Arcium Client] MXE public key retrieved successfully');
+    // In client-encrypted mode, we don't need to fetch the MXE public key here.
+    // The client provides its public key and nonce; we pass encrypted limbs through.
+    console.log('[Arcium Client] Skipping MXE public key fetch (client-encrypted mode)');
 
     // Confidential computing: client MUST provide encrypted data
     if (!input.clientPublicKey || !input.clientNonce) {
@@ -163,10 +146,10 @@ export class ArciumClient {
       throw new Error('Cluster account not provided. Set accounts.cluster or ARCIUM_CLUSTER_PUBKEY.');
     }
     const cluster = new PublicKey(clusterOverride);
-    const poolAccount = getStakingPoolAccAddress();
     const clock = getClockAccAddress();
 
-    const signSeed = PublicKey.findProgramAddressSync([Buffer.from('SignerAccount')], getArciumProgramId());
+    // PDA for this MXE program's signer account (seed: "SignerAccount")
+    const signPda = PublicKey.findProgramAddressSync([Buffer.from('SignerAccount')], mxeProgramId);
 
     const method = (mxeProgram.methods as any)[input.circuit];
     if (!method) throw new Error(`Method ${input.circuit} not found in MXE program`);
@@ -174,15 +157,15 @@ export class ArciumClient {
     console.log('[Arcium Client] Calling MXE program method:', input.circuit);
     
     const accounts = {
+      payer: (provider.wallet as any)?.publicKey,
+      signPdaAccount: signPda[0],
       computationAccount: compAcc,
       clusterAccount: cluster,
       mxeAccount: mxeAcc,
       mempoolAccount: mempool,
       executingPool,
       compDefAccount: compDef,
-      stakingPoolAccount: poolAccount,
       clockAccount: clock,
-      signerAccount: signSeed[0],
       arciumProgram: getArciumProgramId(),
       ...input.accounts, // Merge any additional accounts
     };
@@ -208,15 +191,21 @@ export class ArciumClient {
       )
         .accountsPartial(accounts)
         .rpc({
-          skipPreflight: true,
+          skipPreflight: false,  // Changed to false to see actual errors
           commitment: 'confirmed'
         });
 
       return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
     } catch (error: any) {
-      console.error('[Arcium Client] Method call failed:', error.message);
-      console.error('[Arcium Client] Error stack:', error.stack);
-      throw error;
+      console.error('[Arcium Client] Method call failed:', error?.message || 'No message');
+      console.error('[Arcium Client] Error stack:', error?.stack || 'No stack');
+      console.error('[Arcium Client] Error name:', error?.name);
+      console.error('[Arcium Client] Error type:', typeof error);
+      console.error('[Arcium Client] Full error:', error);
+      if (error?.logs) {
+        console.error('[Arcium Client] Transaction logs:', error.logs);
+      }
+      throw new Error(`Failed to submit transaction: ${error?.message || JSON.stringify(error)}`);
     }
     } catch (error: any) {
       console.error('[Arcium Client] submitQueue failed:', error.message);

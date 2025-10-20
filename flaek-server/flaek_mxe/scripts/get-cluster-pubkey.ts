@@ -1,6 +1,6 @@
 import { getClusterAccAddress } from "@arcium-hq/client";
 
-const CLUSTER_OFFSET = 1078779259; // From your deployment
+const CLUSTER_OFFSET = 933394941;
 
 const clusterPubkey = getClusterAccAddress(CLUSTER_OFFSET);
 

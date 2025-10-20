@@ -184,10 +184,11 @@ export default function PipelineBuilderPage() {
     return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`
   }
 
-function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
+
+  function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6')
+  const [mxeProgramId, setMxeProgramId] = useState('AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)
@@ -681,7 +682,7 @@ function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { op
       const result = await apiTestPipeline({
         pipeline: { nodes: normalizedNodes, edges },
         inputs: testInputs,
-        mxeProgramId: 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6',
+        mxeProgramId: '39n29DcQUxTGDHVw6DNnhSa1T85EXrW88pmbK1VrT8gp',
       })
 
       setTestResult(result)
@@ -1100,7 +1101,7 @@ const privKeyBytes = Buffer.from(privateKey, 'hex');
 const publicKey = x25519.getPublicKey(privKeyBytes);
 
 const connection = new Connection('https://api.devnet.solana.com');
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}');
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7'}');
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
 const cipher = new RescueCipher(sharedSecret);
@@ -1182,7 +1183,7 @@ const privKeyBytes = hexToBytes(privateKey)
 const publicKey = x25519.getPublicKey(privKeyBytes)
 
 const connection = new Connection('https://api.devnet.solana.com')
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6'}')
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || '39n29DcQUxTGDHVw6DNnhSa1T85EXrW88pmbK1VrT8gp'}')
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
 const cipher = new RescueCipher(sharedSecret)

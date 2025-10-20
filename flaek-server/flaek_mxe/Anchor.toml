@@ -6,16 +6,16 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-flaek_mxe = "F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6"
+flaek_mxe = "AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7"
 
 [programs.devnet]
-flaek_mxe = "F1aQdsqtKM61djxRgUwKy4SS5BTKVDtgoK5vYkvL62B6"
+flaek_mxe = "AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7"
 
 [registry]
 url = "https://api.apr.dev"
 
 [provider]
-cluster = "devnet"
+cluster = "https://devnet.helius-rpc.com/?api-key=36a6861e-bab9-4038-93bd-b196fe6adc61"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
