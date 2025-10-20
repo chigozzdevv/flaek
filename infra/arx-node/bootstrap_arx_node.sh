@@ -348,6 +348,7 @@ echo "Starting container (docker run)..."
 sudo docker rm -f arx-node >/dev/null 2>&1 || true
 sudo docker run -d \
   --name arx-node \
+  --network host \
   -e NODE_IDENTITY_FILE=/usr/arx-node/node-keys/node_identity.pem \
   -e NODE_KEYPAIR_FILE=/usr/arx-node/node-keys/node_keypair.json \
   -e OPERATOR_KEYPAIR_FILE=/usr/arx-node/node-keys/operator_keypair.json \
@@ -359,7 +360,6 @@ sudo docker run -d \
   -v "$(pwd)/callback-kp.json:/usr/arx-node/node-keys/callback_authority_keypair.json:ro" \
   -v "$(pwd)/identity.pem:/usr/arx-node/node-keys/node_identity.pem:ro" \
   -v "$(pwd)/arx-node-logs:/usr/arx-node/logs" \
-  -p 8080:8080 \
   --restart unless-stopped \
   arcium/arx-node
 

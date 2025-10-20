@@ -154,17 +154,23 @@ for NAME in "${NODE_ORDER[@]}"; do
   NODE_ADDRESS["$NAME"]="$(gcloud compute addresses describe "$ip_name" --region "$region" --project "$PROJECT" --format='get(address)')"
  done
 
-echo "[3/7] Ensuring firewall rule allow-arx-8080"
-if ! gcloud compute firewall-rules describe allow-arx-8080 --project "$PROJECT" >/dev/null 2>&1; then
-  gcloud compute firewall-rules create allow-arx-8080 \
-    --allow tcp:8080 \
-    --target-tags=arx-node \
-    --direction=INGRESS \
-    --project "$PROJECT" >/dev/null
-  echo "  - created firewall rule allow-arx-8080"
-else
-  echo "  - firewall rule allow-arx-8080 exists"
-fi
+echo "[3/7] Ensuring firewall rules (8080 http, 8001 peer)"
+ensure_rule() {
+  local NAME="$1" PORTS="$2"
+  if ! gcloud compute firewall-rules describe "$NAME" --project "$PROJECT" >/dev/null 2>&1; then
+    gcloud compute firewall-rules create "$NAME" \
+      --allow "$PORTS" \
+      --target-tags=arx-node \
+      --direction=INGRESS \
+      --project "$PROJECT" >/dev/null
+    echo "  - created firewall rule $NAME ($PORTS)"
+  else
+    echo "  - firewall rule $NAME exists"
+  fi
+}
+
+ensure_rule allow-arx-8080 tcp:8080
+ensure_rule allow-arx-8001 tcp:8001
 
 IMAGE_FAMILY=${IMAGE_FAMILY:-ubuntu-2204-lts}
 IMAGE_PROJECT=${IMAGE_PROJECT:-ubuntu-os-cloud}
