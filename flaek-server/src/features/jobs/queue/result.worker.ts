@@ -136,7 +136,7 @@ export function startResultWorker() {
             ct0,
             ct1,
             nonce: job.enc?.nonceB64 || null,
-            mxe_public_key: job.enc?.clientPubKeyB64 || null
+            client_public_key_b64: job.enc?.clientPubKeyB64 || null,
           };
         } else {
           result = { error: 'Could not extract encrypted output from computation', encrypted: false };
