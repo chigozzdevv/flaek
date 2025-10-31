@@ -32,7 +32,7 @@ export default function Hero() {
           transition={{ duration: 0.7, delay: 0.08 }}
           className="mt-6 md:mt-7 text-lg md:text-xl leading-7 md:leading-8 text-white/80 text-pretty max-w-2xl mx-auto"
         >
-          Build dataset‑validated private compute pipelines with a visual builder or API, and integrate via signed webhooks — powered by Arcium.
+          Build dataset‑validated private compute pipelines with a visual builder or API, and integrate via HMAC‑signed webhooks — powered by Arcium.
         </motion.p>
         <motion.div
           initial={{ opacity: 0, y: 16 }}

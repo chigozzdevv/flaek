@@ -59,7 +59,7 @@ export default function LearnMore() {
               {BLOGS.map((b) => (
                 <motion.a
                   key={b.title}
-                  href="#"
+                  href="/docs"
                   variants={{ hidden: { opacity: 0, y: 8 }, show: { opacity: 1, y: 0, transition: { duration: 0.45, ease: [0.16, 1, 0.3, 1] } } }}
                   className="group relative block rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur p-4 md:p-5 hover:border-white/20 transition-colors"
                 >

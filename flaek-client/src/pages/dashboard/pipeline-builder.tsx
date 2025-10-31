@@ -27,6 +27,8 @@ const customStyles = `
   }
 `
 import { Save, Trash2, Loader2, Zap, X, Menu, ArrowLeft, Play, Beaker, Code, Copy, Check, Plus } from 'lucide-react'
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -1324,9 +1326,19 @@ console.log('Job submitted:', job_id)`
                   {copied === 'install' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
-                <code>{installSnippet}</code>
-              </pre>
+              <SyntaxHighlighter 
+                language="bash"
+                style={vscDarkPlus}
+                customStyle={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                {installSnippet}
+              </SyntaxHighlighter>
             </div>
 
             <div>
@@ -1340,9 +1352,19 @@ console.log('Job submitted:', job_id)`
                   {copied === 'keygen' ? 'Copied!' : 'Copy'}
                 </button>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto">
-                <code>{keyGenSnippet}</code>
-              </pre>
+              <SyntaxHighlighter 
+                language="bash"
+                style={vscDarkPlus}
+                customStyle={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                }}
+              >
+                {keyGenSnippet}
+              </SyntaxHighlighter>
               <p className="text-xs text-amber-400 mt-1">Save the key in localStorage as 'flaek_encryption_key'</p>
             </div>
 
@@ -1374,9 +1396,20 @@ console.log('Job submitted:', job_id)`
                   </button>
                 </div>
               </div>
-              <pre className="text-xs bg-white/5 p-3 rounded border border-white/10 overflow-x-auto max-h-80">
-                <code>{snippetMode === 'node' ? nodeSnippet : browserSnippet}</code>
-              </pre>
+              <SyntaxHighlighter 
+                language="javascript"
+                style={vscDarkPlus}
+                customStyle={{
+                  background: 'rgba(255, 255, 255, 0.05)',
+                  padding: '12px',
+                  borderRadius: '8px',
+                  fontSize: '12px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)',
+                  maxHeight: '320px',
+                }}
+              >
+                {snippetMode === 'node' ? nodeSnippet : browserSnippet}
+              </SyntaxHighlighter>
             </div>
           </div>
         </div>
