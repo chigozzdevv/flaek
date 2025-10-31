@@ -1,0 +1,6 @@
+{
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "https://flaek.onrender.com/api/$1" },
+    { "source": "/(.*)", "destination": "/" }
+  ]
+}
