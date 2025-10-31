@@ -10,8 +10,7 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "types": ["node"],
-    "lib": ["ES2020"],
+    "lib": ["ES2020", "DOM"],
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
