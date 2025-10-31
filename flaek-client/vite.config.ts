@@ -15,4 +15,11 @@ export default defineConfig({
   define: {
     global: 'globalThis',
   },
+  server: {
+    proxy: {
+      '/auth': 'https://flaek.onrender.com',
+      '/v1': 'https://flaek.onrender.com',
+      '/tenants': 'https://flaek.onrender.com',
+    },
+  },
 })
