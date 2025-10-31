@@ -25,6 +25,8 @@ const envSchema = z.object({
   API_KEY_HASH_SALT: z.string().min(8),
   INGEST_TTL_SECONDS: z.coerce.number().default(3600),
   JOB_ENC_KEY: z.string().min(16),
+  
+  CORS_ORIGIN: z.string().default('http://localhost:5173'),
 });
 
 export const env = envSchema.parse(process.env);
