@@ -32,7 +32,7 @@ const COMP_DEF_OFFSET_VOTE_TALLY: u32 = comp_def_offset("vote_tally");
 const COMP_DEF_OFFSET_MEETS_THRESHOLD: u32 = comp_def_offset("meets_threshold");
 const COMP_DEF_OFFSET_WEIGHTED_AVERAGE: u32 = comp_def_offset("weighted_average");
 
-declare_id!("BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR");
+declare_id!("6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi");
 
 #[arcium_program]
 pub mod flaek_mxe {
@@ -45,7 +45,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/add_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [76, 115, 187, 89, 55, 27, 169, 16, 245, 168, 205, 39, 79, 95, 193, 169, 178, 252, 161, 169, 188, 227, 93, 165, 123, 121, 155, 226, 35, 147, 199, 75],
             })),
             None,
         )?;
@@ -103,7 +103,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/subtract_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [127, 227, 2, 151, 207, 64, 206, 228, 243, 19, 69, 123, 42, 139, 3, 180, 231, 156, 12, 47, 172, 29, 233, 176, 138, 104, 174, 10, 139, 33, 219, 235],
             })),
             None,
         )?;
@@ -161,7 +161,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/multiply_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [39, 140, 80, 224, 126, 51, 109, 121, 107, 180, 12, 159, 40, 232, 174, 40, 190, 0, 226, 239, 94, 249, 182, 71, 227, 48, 253, 237, 202, 139, 132, 202],
             })),
             None,
         )?;
@@ -219,7 +219,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/divide_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [184, 73, 18, 157, 97, 113, 177, 70, 171, 92, 142, 217, 190, 68, 115, 163, 15, 67, 236, 175, 91, 150, 154, 0, 20, 142, 92, 140, 86, 125, 6, 242],
             })),
             None,
         )?;
@@ -277,7 +277,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/modulo_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [243, 69, 24, 91, 145, 123, 81, 128, 222, 138, 150, 50, 181, 161, 222, 233, 74, 218, 80, 155, 73, 127, 116, 80, 149, 87, 129, 70, 44, 86, 252, 146],
             })),
             None,
         )?;
@@ -335,7 +335,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/abs_diff_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [161, 115, 141, 29, 160, 189, 78, 169, 110, 203, 247, 122, 227, 28, 83, 125, 200, 215, 84, 155, 37, 134, 61, 75, 166, 39, 233, 255, 139, 126, 48, 253],
             })),
             None,
         )?;
@@ -393,7 +393,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/power_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [48, 169, 117, 96, 88, 110, 84, 93, 44, 149, 70, 112, 201, 112, 245, 125, 205, 34, 11, 209, 212, 116, 90, 4, 82, 166, 165, 185, 27, 8, 91, 179],
             })),
             None,
         )?;
@@ -451,7 +451,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/greater_than_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [147, 66, 88, 108, 169, 151, 141, 64, 156, 94, 74, 194, 130, 225, 146, 218, 68, 151, 157, 162, 42, 243, 52, 207, 198, 103, 147, 186, 57, 14, 142, 147],
             })),
             None,
         )?;
@@ -509,7 +509,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/less_than_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [181, 145, 96, 126, 109, 170, 113, 15, 109, 188, 240, 250, 79, 124, 212, 229, 209, 26, 219, 239, 76, 232, 33, 218, 173, 172, 185, 72, 245, 21, 47, 171],
             })),
             None,
         )?;
@@ -567,7 +567,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/equal_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [206, 212, 162, 93, 163, 9, 148, 192, 178, 163, 11, 184, 136, 103, 171, 83, 4, 26, 65, 3, 222, 255, 159, 5, 45, 104, 42, 14, 13, 247, 46, 18],
             })),
             None,
         )?;
@@ -625,7 +625,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/greater_equal_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [4, 105, 225, 184, 124, 232, 63, 119, 13, 226, 185, 87, 141, 54, 104, 31, 212, 112, 143, 167, 255, 206, 199, 46, 196, 65, 194, 204, 166, 153, 114, 232],
             })),
             None,
         )?;
@@ -683,7 +683,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/less_equal_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [12, 154, 182, 66, 3, 141, 237, 156, 234, 249, 150, 2, 164, 180, 48, 16, 79, 234, 146, 203, 214, 30, 133, 202, 255, 189, 96, 105, 108, 151, 7, 197],
             })),
             None,
         )?;
@@ -741,7 +741,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/meets_threshold_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [4, 105, 225, 184, 124, 232, 63, 119, 13, 226, 185, 87, 141, 54, 104, 31, 212, 112, 143, 167, 255, 206, 199, 46, 196, 65, 194, 204, 166, 153, 114, 232],
             })),
             None,
         )?;
@@ -799,7 +799,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/in_range_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [233, 195, 53, 195, 44, 119, 61, 153, 140, 182, 239, 20, 189, 154, 92, 143, 172, 192, 43, 102, 177, 255, 161, 204, 81, 121, 41, 169, 171, 163, 117, 197],
             })),
             None,
         )?;
@@ -859,7 +859,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/and_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [138, 11, 216, 68, 43, 65, 102, 185, 252, 200, 187, 154, 244, 236, 121, 84, 187, 5, 198, 198, 28, 181, 136, 177, 11, 178, 93, 31, 40, 164, 223, 185],
             })),
             None,
         )?;
@@ -917,7 +917,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/or_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [211, 19, 214, 117, 81, 113, 182, 148, 133, 74, 92, 89, 112, 80, 23, 27, 96, 46, 84, 125, 100, 153, 174, 103, 39, 121, 155, 81, 158, 239, 244, 235],
             })),
             None,
         )?;
@@ -975,7 +975,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/xor_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [100, 26, 108, 104, 254, 34, 33, 156, 254, 15, 239, 219, 213, 198, 140, 208, 133, 82, 106, 16, 203, 203, 254, 73, 240, 80, 243, 6, 28, 25, 35, 132],
             })),
             None,
         )?;
@@ -1033,7 +1033,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/not_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [250, 81, 31, 53, 118, 82, 133, 22, 130, 255, 232, 101, 208, 26, 247, 139, 253, 118, 158, 220, 145, 54, 187, 211, 114, 81, 4, 198, 233, 157, 68, 65],
             })),
             None,
         )?;
@@ -1089,7 +1089,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/if_else_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [195, 205, 197, 200, 12, 64, 22, 73, 50, 31, 39, 3, 5, 215, 158, 143, 14, 173, 168, 231, 43, 161, 179, 67, 105, 11, 222, 141, 180, 92, 217, 60],
             })),
             None,
         )?;
@@ -1149,7 +1149,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/vote_tally_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [32, 18, 66, 129, 137, 214, 186, 21, 104, 58, 248, 170, 162, 18, 27, 179, 22, 199, 127, 62, 178, 183, 227, 205, 126, 173, 162, 1, 102, 4, 47, 15],
             })),
             None,
         )?;
@@ -1205,7 +1205,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/average_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [15, 106, 194, 134, 5, 201, 93, 123, 94, 195, 162, 41, 125, 205, 45, 6, 151, 70, 146, 33, 5, 158, 166, 76, 92, 98, 69, 147, 83, 238, 105, 195],
             })),
             None,
         )?;
@@ -1263,7 +1263,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/sum_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [167, 116, 170, 125, 249, 48, 147, 95, 186, 93, 49, 15, 157, 117, 49, 25, 126, 215, 230, 5, 172, 61, 249, 125, 241, 71, 150, 213, 226, 112, 191, 211],
             })),
             None,
         )?;
@@ -1321,7 +1321,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/min_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [74, 92, 82, 35, 143, 240, 181, 67, 118, 126, 0, 75, 117, 187, 62, 157, 28, 130, 111, 229, 103, 120, 235, 253, 176, 189, 25, 147, 123, 146, 39, 167],
             })),
             None,
         )?;
@@ -1379,7 +1379,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/max_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [79, 125, 166, 245, 145, 226, 109, 49, 113, 146, 40, 191, 8, 72, 114, 242, 121, 170, 34, 202, 78, 194, 16, 179, 180, 7, 66, 116, 149, 212, 191, 191],
             })),
             None,
         )?;
@@ -1437,7 +1437,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/median_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [15, 106, 194, 134, 5, 201, 93, 123, 94, 195, 162, 41, 125, 205, 45, 6, 151, 70, 146, 33, 5, 158, 166, 76, 92, 98, 69, 147, 83, 238, 105, 195],
             })),
             None,
         )?;
@@ -1495,7 +1495,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/weighted_average_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [37, 248, 234, 72, 8, 91, 226, 223, 118, 251, 40, 136, 118, 72, 53, 19, 58, 201, 52, 163, 61, 41, 238, 26, 84, 202, 153, 11, 0, 53, 77, 135],
             })),
             None,
         )?;
@@ -1553,7 +1553,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/credit_score_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [80, 158, 20, 106, 37, 111, 80, 22, 247, 144, 40, 63, 225, 14, 173, 209, 180, 113, 154, 5, 231, 147, 145, 225, 56, 168, 127, 150, 180, 48, 114, 74],
             })),
             None,
         )?;
@@ -1616,7 +1616,7 @@ pub mod flaek_mxe {
             0,
             Some(CircuitSource::OffChain(OffChainCircuitSource {
                 source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeifk6o7nffgglzh7jm4ml6p357pr436amt5pk7f2xcavcqhpphvptu/circuits/devnet/health_risk_devnet.arcis".to_string(),
-                hash: [0; 32],
+                hash: [88, 39, 225, 157, 73, 6, 175, 140, 99, 24, 112, 227, 53, 53, 17, 148, 131, 208, 190, 216, 156, 5, 8, 180, 193, 239, 12, 118, 74, 18, 48, 71],
             })),
             None,
         )?;

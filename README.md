@@ -1,6 +1,6 @@
 # Flaek
 
-Flaek lets you build and run private computations on encrypted data. Imagine drawing a flowchart of building blocks (add, compare, threshold, domain blocks like credit_score) and having it run end‑to‑end on the Arcium MPC network, so inputs stay encrypted and only the right parties can decrypt the outputs.
+Flaek lets you build and run private computations on encrypted data. Build powerful compute pipeline with pre-compiled blocks (add, compare, threshold, domain blocks like credit_score) and have it run end‑to‑end on the Arcium MPC network, so inputs stay encrypted and only the right parties can decrypt the outputs.
 
 At a glance:
 - flaek-server: TypeScript/Express API that manages tenants, datasets, pipelines, jobs, credits, attestations, and Arcium execution.

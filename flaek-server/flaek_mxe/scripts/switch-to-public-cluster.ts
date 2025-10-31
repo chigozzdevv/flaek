@@ -281,7 +281,7 @@ async function main() {
     console.log('Derived program id from keypair:', programId.toBase58());
   }
   if (!programId) {
-  const programIdStr = args.programId || idl.address || idl?.metadata?.address || 'BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR';
+  const programIdStr = args.programId || idl.address || idl?.metadata?.address || '6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi';
     programId = new PublicKey(programIdStr);
   }
 
