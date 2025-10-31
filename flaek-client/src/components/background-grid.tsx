@@ -16,7 +16,7 @@ export default function BackgroundGrid({
   radiusY?: number
 }) {
   const ref = useRef<HTMLDivElement>(null)
-  const [{ cols, rows, width, height }, setGrid] = useState({ cols: 0, rows: 0, width: 0, height: 0 })
+  const [{ cols, rows }, setGrid] = useState({ cols: 0, rows: 0, width: 0, height: 0 } as any)
 
   useEffect(() => {
     const compute = () => {

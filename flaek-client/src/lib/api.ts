@@ -28,9 +28,9 @@ async function request(path: string, opts: RequestInit = {}) {
 }
 
 // Auth
-export async function apiSignup(input: { name: string; email: string; password: string; confirmPassword: string; orgName?: string }) {
+export async function apiSignup(input: { name: string; email: string; password: string; confirmPassword: string; orgName: string }) {
   return request('/auth/signup', { method: 'POST', body: JSON.stringify(input) }) as Promise<{
-    user_id: string; tenant_id?: string; totp: { secret_base32: string; otpauth_url: string }
+    user_id: string; tenant_id: string; totp: { secret_base32: string; otpauth_url: string }
   }>
 }
 
@@ -40,6 +40,16 @@ export async function apiVerifyTotp(input: { email: string; code: string }) {
 
 export async function apiLogin(input: { email: string; password: string; code?: string }) {
   return request('/auth/login', { method: 'POST', body: JSON.stringify(input) }) as Promise<{ jwt: string }>
+}
+
+export async function apiRequestPasswordReset(input: { email: string }) {
+  await request('/auth/reset-password/request', { method: 'POST', body: JSON.stringify(input) })
+  return { ok: true }
+}
+
+export async function apiConfirmPasswordReset(input: { token: string; password: string; confirmPassword: string }) {
+  await request('/auth/reset-password/confirm', { method: 'POST', body: JSON.stringify(input) })
+  return { ok: true }
 }
 
 // Tenant
@@ -83,6 +93,36 @@ export async function apiGetApiKeys() {
       status: 'active' | 'revoked'
     }>
   }>
+}
+
+export async function apiUpdateTenantName(name: string) {
+  return request('/tenants/me', { method: 'PATCH', body: JSON.stringify({ name }) }) as Promise<{
+    tenant_id: string
+    org_name: string
+  }>
+}
+
+// User
+export async function apiMe() {
+  return request('/auth/me') as Promise<{ user: { id: string; name: string; email: string; role: string; totpEnabled: boolean; createdAt: string } }>
+}
+
+export async function apiChangePassword(input: { oldPassword: string; newPassword: string; confirmNewPassword: string }) {
+  await request('/auth/change-password', { method: 'POST', body: JSON.stringify(input) })
+  return { ok: true }
+}
+
+export async function apiTotpSetup() {
+  return request('/auth/totp/setup', { method: 'POST' }) as Promise<{ totp: { secret_base32: string; otpauth_url: string } }>
+}
+
+export async function apiTotpVerifyJwt(code: string) {
+  return request('/auth/totp/verify', { method: 'POST', body: JSON.stringify({ code }) }) as Promise<{ enabled: boolean }>
+}
+
+export async function apiTotpDisable(code: string) {
+  await request('/auth/totp/disable', { method: 'POST', body: JSON.stringify({ code }) })
+  return { ok: true }
 }
 
 // Datasets
@@ -304,7 +344,7 @@ export async function apiTestPipeline(input: { pipeline: any; inputs: any; mxePr
   const body = {
     pipeline: input.pipeline,
     inputs: input.inputs,
-    mxeProgramId: input.mxeProgramId || 'AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7',
+    mxeProgramId: input.mxeProgramId || 'BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR',
     dryRun: true,
   }
   const res = await request('/v1/pipelines/execute', { method: 'POST', body: JSON.stringify(body) }) as {

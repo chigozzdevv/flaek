@@ -188,7 +188,7 @@ export default function PipelineBuilderPage() {
   function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7')
+  const [mxeProgramId, setMxeProgramId] = useState('BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)
@@ -1101,7 +1101,7 @@ const privKeyBytes = Buffer.from(privateKey, 'hex');
 const publicKey = x25519.getPublicKey(privKeyBytes);
 
 const connection = new Connection('https://api.devnet.solana.com');
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7'}');
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'FonvaXZrDWaLnCEC8YVuKDCtNw76XctEdT4dkah5xydM'}');
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
 const cipher = new RescueCipher(sharedSecret);

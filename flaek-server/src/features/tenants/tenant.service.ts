@@ -64,4 +64,11 @@ async function listKeys(ownerUserId: string) {
   };
 }
 
-export const tenantService = { me, createKey, revokeKey, createPublishable, listKeys };
+async function updateName(ownerUserId: string, name: string) {
+  const t = await tenantRepository.findByOwnerUserId(ownerUserId);
+  if (!t) throw httpError(404, 'not_found', 'tenant_not_found');
+  const updated = await tenantRepository.updateName(ownerUserId, name);
+  return { tenant_id: updated!.id, org_name: updated!.name };
+}
+
+export const tenantService = { me, createKey, revokeKey, createPublishable, listKeys, updateName };

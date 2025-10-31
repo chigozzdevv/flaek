@@ -147,7 +147,7 @@ export default function PlaygroundPage() {
           break
         }
         if (j.status === 'failed') {
-          setError(j.error || 'Job failed')
+          setError((j as any).error || 'Job failed')
           break
         }
         await new Promise(r => setTimeout(r, 1500))

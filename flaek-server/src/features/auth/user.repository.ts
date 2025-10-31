@@ -7,6 +7,9 @@ export const userRepository = {
   async findById(id: string) {
     return UserModel.findById(id).exec();
   },
+  async findByValidResetToken(token: string) {
+    return UserModel.findOne({ resetPasswordToken: token, resetPasswordExpires: { $gt: new Date() } }).exec();
+  },
   async create(data: Partial<UserDocument>) {
     const user = new UserModel(data);
     return user.save();
@@ -22,5 +25,11 @@ export const userRepository = {
   },
   async updatePassword(userId: string, passwordHash: string) {
     return UserModel.findByIdAndUpdate(userId, { passwordHash }, { new: true }).exec();
+  },
+  async setResetPassword(userId: string, token: string, expiresAt: Date) {
+    return UserModel.findByIdAndUpdate(userId, { resetPasswordToken: token, resetPasswordExpires: expiresAt }, { new: true }).exec();
+  },
+  async clearResetPassword(userId: string) {
+    return UserModel.findByIdAndUpdate(userId, { resetPasswordToken: undefined, resetPasswordExpires: undefined }, { new: true }).exec();
   },
 };

@@ -1,15 +1,16 @@
 [toolchain]
 package_manager = "yarn"
+anchor_version = "0.31.1"
 
 [features]
 resolution = true
 skip-lint = false
 
 [programs.localnet]
-flaek_mxe = "AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7"
+flaek_mxe = "BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR"
 
 [programs.devnet]
-flaek_mxe = "AF3aPN4n6udY1Uan5jkUrbzFfiquPiXcrTBTNmfR2GP7"
+flaek_mxe = "BNrnP5CFtszaCymD7rBM776cD62ExLAx4TgpYQJPyvHR"
 
 [registry]
 url = "https://api.apr.dev"

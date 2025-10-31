@@ -55,13 +55,14 @@ function SignupForm() {
   const [step, setStep] = useState<'form' | 'totp'>('form')
   const [totp, setTotp] = useState<{ secret: string; url: string } | null>(null)
   const [code, setCode] = useState('')
+  const [qr, setQr] = useState<string>('')
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault()
     setError(null)
     setLoading(true)
     try {
-      const out = await apiSignup({ name, email, password, confirmPassword: confirm, orgName: org || undefined })
+      const out = await apiSignup({ name, email, password, confirmPassword: confirm, orgName: org })
       setTotp({ secret: out.totp.secret_base32, url: out.totp.otpauth_url })
       setStep('totp')
     } catch (err: any) {
@@ -86,6 +87,23 @@ function SignupForm() {
     }
   }
 
+  useEffect(() => {
+    let mounted = true
+    async function gen() {
+      if (totp?.url) {
+        try {
+          const { toDataURL } = await import('qrcode')
+          const dataUrl = await toDataURL(totp.url)
+          if (mounted) setQr(dataUrl)
+        } catch {}
+      } else {
+        setQr('')
+      }
+    }
+    gen()
+    return () => { mounted = false }
+  }, [totp?.url])
+
   if (step === 'totp') {
     return (
       <form onSubmit={onVerify} className="space-y-6">
@@ -94,10 +112,19 @@ function SignupForm() {
           <p className="mt-2 text-sm text-white/70 leading-relaxed">Set up 2FA in your authenticator app, then enter the 6‑digit code.</p>
         </div>
         <div className="rounded-xl border border-white/10 bg-white/[0.03] p-5">
-          <div className="text-xs font-medium uppercase tracking-wide text-white/60 mb-2">Secret Key</div>
-          <div className="mt-1 font-mono text-sm break-all text-white/90 leading-relaxed">{totp?.secret}</div>
-          {totp?.url && (
-            <a className="mt-3 inline-block text-sm text-brand-500 hover:text-brand-400 font-medium transition-colors" href={totp.url}>Open in authenticator →</a>
+          {qr ? (
+            <div className="flex flex-col items-center">
+              <img src={qr} alt="Scan QR" className="w-48 h-48" />
+              <a className="mt-3 inline-block text-sm text-brand-500 hover:text-brand-400 font-medium transition-colors" href={totp?.url || '#'}>Open in authenticator →</a>
+            </div>
+          ) : (
+            <div>
+              <div className="text-xs font-medium uppercase tracking-wide text-white/60 mb-2">Secret Key</div>
+              <div className="mt-1 font-mono text-sm break-all text-white/90 leading-relaxed">{totp?.secret}</div>
+              {totp?.url && (
+                <a className="mt-3 inline-block text-sm text-brand-500 hover:text-brand-400 font-medium transition-colors" href={totp.url}>Open in authenticator →</a>
+              )}
+            </div>
           )}
         </div>
         <div>
@@ -110,6 +137,7 @@ function SignupForm() {
           <button disabled={loading || code.length!==6} className="flex-1 inline-flex items-center justify-center rounded-lg bg-gradient-to-r from-brand-500 to-brand-600 px-6 py-3 text-sm font-semibold disabled:opacity-50 disabled:cursor-not-allowed hover:from-brand-600 hover:to-brand-700 transition-all duration-200 shadow-lg shadow-brand-500/20 hover:shadow-xl hover:shadow-brand-500/30">{loading?'Verifying…':'Verify & continue'}</button>
           <button type="button" onClick={()=>setStep('form')} className="px-4 py-3 text-sm text-white/70 hover:text-white transition-colors">Back</button>
         </div>
+        <div className="text-center text-sm text-white/70">Don’t want to set up 2FA now? <a href="/signin" onClick={(e)=>{ e.preventDefault(); navigate('/signin') }} className="text-brand-500 hover:text-brand-400 font-medium transition-colors">Skip for now</a></div>
       </form>
     )
   }
@@ -122,8 +150,8 @@ function SignupForm() {
           <input value={name} onChange={e=>setName(e.target.value)} required className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-base outline-none focus:border-brand-500/50 focus:ring-2 focus:ring-brand-500/20 transition-all duration-200" placeholder="Ada Lovelace" />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-2">Organization <span className="text-white/50 font-normal">(optional)</span></label>
-          <input value={org} onChange={e=>setOrg(e.target.value)} className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-base outline-none focus:border-brand-500/50 focus:ring-2 focus:ring-brand-500/20 transition-all duration-200" placeholder="My company" />
+          <label className="block text-sm font-medium mb-2">Organization</label>
+          <input value={org} onChange={e=>setOrg(e.target.value)} required className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-base outline-none focus:border-brand-500/50 focus:ring-2 focus:ring-brand-500/20 transition-all duration-200" placeholder="My company" />
         </div>
       </div>
       <div>
@@ -180,6 +208,7 @@ function SigninForm() {
       <div>
         <label className="block text-sm font-medium mb-2">Password</label>
         <input type="password" value={password} onChange={e=>setPassword(e.target.value)} required className="w-full rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-base outline-none focus:border-brand-500/50 focus:ring-2 focus:ring-brand-500/20 transition-all duration-200" placeholder="Your password" />
+        <div className="mt-2 text-sm"><a href="/forgot-password" onClick={(e)=>{ e.preventDefault(); navigate('/forgot-password') }} className="text-white/70 hover:text-white transition-colors">Forgot password?</a></div>
       </div>
       <div>
         <div className="flex items-center justify-between mb-2">

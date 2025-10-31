@@ -4,6 +4,8 @@ import './index.css'
 import App from '@/app'
 import GetStartedPage from '@/pages/get-started'
 import SigninPage from '@/pages/signin'
+import ForgotPasswordPage from '@/pages/forgot-password'
+import ResetPasswordPage from '@/pages/reset-password'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import OverviewPage from '@/pages/dashboard/overview'
 import DatasetsPage from '@/pages/dashboard/datasets'
@@ -15,6 +17,7 @@ import BlocksPage from '@/pages/dashboard/blocks'
 import ApiKeysPage from '@/pages/dashboard/api-keys'
 import WebhooksPage from '@/pages/dashboard/webhooks'
 import CreditsPage from '@/pages/dashboard/credits'
+import SettingsPage from '@/pages/dashboard/settings'
 
 function usePathname() {
   const [path, setPath] = useState(window.location.pathname)
@@ -31,6 +34,8 @@ function Router() {
   
   if (path === '/get-started') return <GetStartedPage />
   if (path === '/signin') return <SigninPage />
+  if (path === '/forgot-password') return <ForgotPasswordPage />
+  if (path === '/reset-password') return <ResetPasswordPage />
   
   if (path.startsWith('/dashboard')) {
     return (
@@ -45,6 +50,7 @@ function Router() {
         {path === '/dashboard/keys' && <ApiKeysPage />}
         {path === '/dashboard/webhooks' && <WebhooksPage />}
         {path === '/dashboard/credits' && <CreditsPage />}
+        {path === '/dashboard/settings' && <SettingsPage />}
       </DashboardLayout>
     )
   }

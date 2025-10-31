@@ -12,6 +12,7 @@
     "arcium:derive": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/derive-accounts.ts",
     "arcium:idl": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/fetch-idl.ts",
     "arcium:upload": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/upload-circuit.ts",
+    "arcium:upload-all": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/upload-all-circuits.ts",
     "arcium:finalize": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/finalize-compdef.ts",
     "arcium:list": "ts-node-dev -r tsconfig-paths/register src/features/arcium/cli/list-mxes.ts"
   },
@@ -30,6 +31,7 @@
     "csv-parse": "^6.1.0",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
+    "form-data": "^4.0.0",
     "ioredis": "^5.8.1",
     "jsonwebtoken": "^9.0.2",
     "mongoose": "^8.19.1",

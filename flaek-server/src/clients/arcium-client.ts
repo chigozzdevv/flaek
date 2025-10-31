@@ -1,5 +1,5 @@
 import * as anchor from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, ComputeBudgetProgram } from '@solana/web3.js';
 import { x25519, RescueCipher, getMXEPublicKey, deserializeLE, getArciumProgram, getArciumProgramId, getComputationAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getCompDefAccAddress, getStakingPoolAccAddress, getClockAccAddress, getMXEAccAddress } from '@arcium-hq/client';
 import crypto from 'crypto';
 
@@ -190,8 +190,12 @@ export class ArciumClient {
         new (anchor as any).BN(deserializeLE(nonce).toString())
       )
         .accountsPartial(accounts)
+        .preInstructions([
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
+          ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 }),
+        ])
         .rpc({
-          skipPreflight: false,  // Changed to false to see actual errors
+          skipPreflight: false,
           commitment: 'confirmed'
         });
 

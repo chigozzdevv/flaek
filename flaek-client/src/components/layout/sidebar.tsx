@@ -1,4 +1,4 @@
-import { LayoutDashboard, Database, Workflow, Package, Briefcase, Blocks, Key, Webhook, CreditCard, BookOpen, LogOut, Play } from 'lucide-react'
+import { LayoutDashboard, Database, Workflow, Package, Briefcase, Blocks, Key, Webhook, CreditCard, LogOut, Play, Settings as SettingsIcon } from 'lucide-react'
 import BrandLogo from '@/components/brand-logo'
 import { navigate } from '@/lib/router'
 import { clearToken } from '@/lib/auth'
@@ -14,7 +14,7 @@ const navItems = [
   { icon: Key, label: 'API Keys', path: '/dashboard/keys' },
   { icon: Webhook, label: 'Webhooks', path: '/dashboard/webhooks' },
   { icon: CreditCard, label: 'Credits', path: '/dashboard/credits' },
-  { icon: BookOpen, label: 'Documentation', path: '/docs' },
+  { icon: SettingsIcon, label: 'Settings', path: '/dashboard/settings' },
 ]
 
 type SidebarProps = {

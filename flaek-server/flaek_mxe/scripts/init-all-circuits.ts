@@ -24,7 +24,8 @@ async function initializeCircuit(
   program: Program<FlaekMxe>,
   owner: anchor.web3.Keypair,
   provider: anchor.AnchorProvider,
-  circuitName: string
+  circuitName: string,
+  force: boolean
 ): Promise<boolean> {
   try {
     console.log(`\n----------------------------------------`);
@@ -46,9 +47,11 @@ async function initializeCircuit(
     // Check if already initialized
     try {
       const accountInfo = await provider.connection.getAccountInfo(compDefPDA);
-      if (accountInfo && accountInfo.data.length > 0) {
+      if (accountInfo && accountInfo.data.length > 0 && !force) {
         console.log(`  ✓ Already initialized, skipping...`);
         return true;
+      } else if (accountInfo && accountInfo.data.length > 0 && force) {
+        console.log(`  ⚠️ Already initialized, attempting re-init to update source...`);
       }
     } catch (e) {
       // Account doesn't exist, proceed with initialization
@@ -129,8 +132,10 @@ async function main() {
 
   const results: { circuit: string; success: boolean }[] = [];
 
+  const force = process.argv.includes('--force');
+
   for (const circuit of CIRCUITS) {
-    const success = await initializeCircuit(program, owner, provider, circuit);
+    const success = await initializeCircuit(program, owner, provider, circuit, force);
     results.push({ circuit, success });
     
     // Small delay between circuits to avoid rate limiting

@@ -5,8 +5,9 @@ import { httpError } from '@/shared/errors';
 import { signJwt } from '@/utils/jwt';
 import { generateTotpSecret, buildOtpAuthUrl, verifyTotpToken } from '@/utils/totp';
 import { Roles } from '@/shared/roles';
+import crypto from 'crypto';
 
-type SignupInput = { name: string; email: string; password: string; orgName?: string };
+type SignupInput = { name: string; email: string; password: string; orgName: string };
 type VerifyTotpInput = { email: string; code: string };
 type LoginInput = { email: string; password: string; code?: string };
 type MeInput = { userId: string };
@@ -14,6 +15,8 @@ type ChangePasswordInput = { userId: string; oldPassword: string; newPassword: s
 type TotpSetupInput = { userId: string };
 type TotpVerifyJwtInput = { userId: string; code: string };
 type TotpDisableInput = { userId: string; code: string };
+type ResetPasswordRequestInput = { email: string };
+type ResetPasswordConfirmInput = { token: string; password: string };
 
 async function signup(input: SignupInput) {
   const existing = await userRepository.findByEmail(input.email);
@@ -29,12 +32,8 @@ async function signup(input: SignupInput) {
     totpSecret: secret,
   } as any);
   const otpauth_url = buildOtpAuthUrl(user.email, secret);
-  let tenant_id: string | undefined;
-  if (input.orgName && input.orgName.trim().length > 0) {
-    const tenant = await tenantRepository.ensureForOwner(user.id, input.orgName.trim());
-    tenant_id = tenant.id;
-  }
-  return { user_id: user.id, tenant_id, totp: { secret_base32: secret, otpauth_url } };
+  const tenant = await tenantRepository.ensureForOwner(user.id, input.orgName.trim());
+  return { user_id: user.id, tenant_id: tenant.id, totp: { secret_base32: secret, otpauth_url } };
 }
 
 async function verifyTotp(input: VerifyTotpInput) {
@@ -103,4 +102,21 @@ async function totpDisable(input: TotpDisableInput) {
   await userRepository.disableTotp(user.id);
 }
 
-export const authService = { signup, verifyTotp, login, me, changePassword, totpSetup, totpVerifyJwt, totpDisable };
+ 
+async function resetPasswordRequest(input: ResetPasswordRequestInput) {
+  const user = await userRepository.findByEmail(input.email.toLowerCase());
+  if (!user) return;
+  const token = crypto.randomBytes(32).toString('hex');
+  const expiresAt = new Date(Date.now() + 1000 * 60 * 60);
+  await userRepository.setResetPassword(user.id, token, expiresAt);
+}
+
+async function resetPasswordConfirm(input: ResetPasswordConfirmInput) {
+  const user = await userRepository.findByValidResetToken(input.token);
+  if (!user) throw httpError(400, 'invalid_token', 'invalid_or_expired_token');
+  const hash = await hashPassword(input.password);
+  await userRepository.updatePassword(user.id, hash);
+  await userRepository.clearResetPassword(user.id);
+}
+
+export const authService = { signup, verifyTotp, login, me, changePassword, totpSetup, totpVerifyJwt, totpDisable, resetPasswordRequest, resetPasswordConfirm };

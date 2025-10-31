@@ -6,7 +6,7 @@ export const signupSchema = z.object({
     email: z.string().email(),
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
-    orgName: z.string().min(2).optional(),
+    orgName: z.string().min(2),
   }).refine((d) => d.password === d.confirmPassword, { message: 'passwords_do_not_match', path: ['confirmPassword'] }),
 });
 
@@ -39,4 +39,18 @@ export const totpVerifyJwtSchema = z.object({
 
 export const totpDisableSchema = z.object({
   body: z.object({ code: z.string().min(6).max(6) }),
+});
+
+export const resetPasswordRequestSchema = z.object({
+  body: z.object({
+    email: z.string().email(),
+  }),
+});
+
+export const resetPasswordConfirmSchema = z.object({
+  body: z.object({
+    token: z.string().min(10),
+    password: z.string().min(8),
+    confirmPassword: z.string().min(8),
+  }).refine((d) => d.password === d.confirmPassword, { message: 'passwords_do_not_match', path: ['confirmPassword'] }),
 });

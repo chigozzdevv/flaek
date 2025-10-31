@@ -45,6 +45,14 @@ export const tenantRepository = {
   async findByPublishableKey(publishableKey: string) {
     return TenantModel.findOne({ publishableKey }).exec();
   },
+  async updateName(ownerUserId: string, name: string) {
+    const t = await TenantModel.findOneAndUpdate(
+      { ownerUserId },
+      { name },
+      { new: true }
+    ).exec();
+    return t;
+  },
 };
 
 export const tenantHash = { hashApiKey };

@@ -33,4 +33,11 @@ async function listKeys(req: Request, res: Response) {
   res.json(out);
 }
 
-export const tenantController = { me, createKey, createPublishableKey, revokeKey, listKeys };
+async function updateName(req: Request, res: Response) {
+  const user = (req as any).user as { sub: string };
+  const { name } = req.body || {};
+  const out = await tenantService.updateName(user.sub, name);
+  res.json(out);
+}
+
+export const tenantController = { me, createKey, createPublishableKey, revokeKey, listKeys, updateName };

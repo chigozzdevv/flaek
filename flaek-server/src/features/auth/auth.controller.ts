@@ -54,4 +54,16 @@ async function totpDisable(req: Request, res: Response) {
   res.status(204).end();
 }
 
-export const authController = { signup, verifyTotp, login, logout, me, changePassword, totpSetup, totpVerifyJwt, totpDisable };
+async function resetPasswordRequest(req: Request, res: Response) {
+  const { email } = req.body;
+  await authService.resetPasswordRequest({ email });
+  res.status(204).end();
+}
+
+async function resetPasswordConfirm(req: Request, res: Response) {
+  const { token, password } = req.body;
+  await authService.resetPasswordConfirm({ token, password });
+  res.status(204).end();
+}
+
+export const authController = { signup, verifyTotp, login, logout, me, changePassword, totpSetup, totpVerifyJwt, totpDisable, resetPasswordRequest, resetPasswordConfirm };
