@@ -6,6 +6,7 @@ import GetStartedPage from '@/pages/get-started'
 import SigninPage from '@/pages/signin'
 import ForgotPasswordPage from '@/pages/forgot-password'
 import ResetPasswordPage from '@/pages/reset-password'
+import DocsPage from '@/pages/docs'
 import { DashboardLayout } from '@/components/layout/dashboard-layout'
 import OverviewPage from '@/pages/dashboard/overview'
 import DatasetsPage from '@/pages/dashboard/datasets'
@@ -36,6 +37,7 @@ function Router() {
   if (path === '/signin') return <SigninPage />
   if (path === '/forgot-password') return <ForgotPasswordPage />
   if (path === '/reset-password') return <ResetPasswordPage />
+  if (path === '/docs') return <DocsPage />
   
   if (path.startsWith('/dashboard')) {
     return (
