@@ -1,14 +1,29 @@
 import { Server } from 'socket.io';
 import { Server as HTTPServer } from 'http';
 import { verifyJwt } from '@/utils/jwt';
+import { env } from '@/config/env';
 
 let io: Server | null = null;
 
 export function initializeSocket(httpServer: HTTPServer) {
+  const allowedOrigins = env.CORS_ORIGIN.split(',').map((o) => o.trim()).filter(Boolean);
+  const allowedOriginPatterns = [/^https:\/\/.*\.vercel\.app$/];
+
+  function isAllowedOrigin(origin?: string | null) {
+    if (!origin) return true;
+    if (allowedOrigins.includes(origin)) return true;
+    return allowedOriginPatterns.some((re) => re.test(origin));
+  }
+
   io = new Server(httpServer, {
     cors: {
-      origin: 'http://localhost:5173',
+      origin(origin, callback) {
+        if (isAllowedOrigin(origin)) return callback(null, true);
+        return callback(new Error('Not allowed by CORS'));
+      },
       credentials: true,
+      methods: ['GET', 'POST'],
+      allowedHeaders: ['Authorization', 'Content-Type'],
     },
   });
 
