@@ -142,6 +142,7 @@ export class ArciumClient {
       throw new Error('Provide ciphertexts[] or payload');
     }
     console.log('[Arcium Client] Ciphertexts:', cts.length);
+    console.log('[Arcium Client] Ciphertext byte lengths:', cts.map((ct) => ct.length));
 
     const compOffset = new (anchor as any).BN(crypto.randomBytes(8).toString('hex'), 16);
     const compAcc = getComputationAccAddress(mxeProgramId, compOffset);
@@ -158,6 +159,16 @@ export class ArciumClient {
 
     // PDA for this MXE program's signer account (seed: "SignerAccount")
     const signPda = PublicKey.findProgramAddressSync([Buffer.from('SignerAccount')], mxeProgramId);
+    console.log('[Arcium Client] Derived PDA addresses:', {
+      signPda: signPda[0].toBase58(),
+      computationAccount: compAcc.toBase58(),
+      mempool: mempool.toBase58(),
+      executingPool: executingPool.toBase58(),
+      compDef: compDef.toBase58(),
+      mxeAccount: mxeAcc.toBase58(),
+      cluster: cluster.toBase58(),
+      clock: clock.toBase58(),
+    });
 
     const method = (mxeProgram.methods as any)[input.circuit];
     if (!method) throw new Error(`Method ${input.circuit} not found in MXE program`);
@@ -190,6 +201,8 @@ export class ArciumClient {
       console.log('[Arcium Client] Latest blockhash:', blockhash);
 
       const ciphertextArgs = cts.map((ct) => Array.from(ct));
+      const requestedHeapBytes = 256 * 1024;
+      console.log('[Arcium Client] Requesting heap frame (bytes):', requestedHeapBytes);
       const tx = await method(
         compOffset,
         ...ciphertextArgs,
@@ -198,6 +211,7 @@ export class ArciumClient {
       )
         .accountsPartial(accounts)
         .preInstructions([
+          ComputeBudgetProgram.requestHeapFrame({ bytes: requestedHeapBytes }),
           ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
           ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
         ])

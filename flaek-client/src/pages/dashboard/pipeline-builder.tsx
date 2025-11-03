@@ -190,7 +190,7 @@ export default function PipelineBuilderPage() {
   function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ')
+  const [mxeProgramId, setMxeProgramId] = useState('GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)
@@ -1088,7 +1088,7 @@ function CodeSnippetModal({ open, onClose, operation }: { open: boolean; onClose
 
   const keyGenSnippet = `node -e "const { x25519 } = require('@arcium-hq/client'); const key = Buffer.from(x25519.utils.randomSecretKey()).toString('hex'); console.log('Your Encryption Key (save securely):'); console.log(key);"`
 
-  const nodeSnippet = `// Node.js example (set FLAEK_ENC_KEY in env)
+const nodeSnippet = `// Node.js example (set FLAEK_ENC_KEY in env)
 const { x25519, RescueCipher, getMXEPublicKey, deserializeLE } = require('@arcium-hq/client');
 const { Connection, PublicKey } = require('@solana/web3.js');
 const axios = require('axios');
@@ -1103,7 +1103,7 @@ const privKeyBytes = Buffer.from(privateKey, 'hex');
 const publicKey = x25519.getPublicKey(privKeyBytes);
 
 const connection = new Connection('https://api.devnet.solana.com');
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'FonvaXZrDWaLnCEC8YVuKDCtNw76XctEdT4dkah5xydM'}');
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9'}');
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
 const cipher = new RescueCipher(sharedSecret);
@@ -1185,7 +1185,7 @@ const privKeyBytes = hexToBytes(privateKey)
 const publicKey = x25519.getPublicKey(privKeyBytes)
 
 const connection = new Connection('https://api.devnet.solana.com')
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || '39n29DcQUxTGDHVw6DNnhSa1T85EXrW88pmbK1VrT8gp'}')
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9'}')
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
 const cipher = new RescueCipher(sharedSecret)

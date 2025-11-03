@@ -25,7 +25,8 @@ async function initializeCircuit(
   owner: anchor.web3.Keypair,
   provider: anchor.AnchorProvider,
   circuitName: string,
-  force: boolean
+  force: boolean,
+  offchainSource: boolean
 ): Promise<boolean> {
   try {
     console.log(`\n----------------------------------------`);
@@ -81,6 +82,12 @@ async function initializeCircuit(
 
     console.log(`  ✓ Initialization tx: ${sig}`);
 
+    if (offchainSource) {
+      console.log(`  ✓ Registered off-chain circuit source (no on-chain upload needed)`);
+      console.log(`  ✅ ${circuitName} initialized for off-chain execution!`);
+      return true;
+    }
+
     // Wait a bit for the transaction to settle
     await new Promise(resolve => setTimeout(resolve, 2000));
 
@@ -133,9 +140,15 @@ async function main() {
   const results: { circuit: string; success: boolean }[] = [];
 
   const force = process.argv.includes('--force');
+  const offchainSource = process.argv.includes('--onchain') ? false : true;
+  if (offchainSource) {
+    console.log("Off-chain circuit mode enabled (pass --onchain to revert).");
+  } else {
+    console.log("On-chain circuit mode enabled (finalizing and uploading metadata).");
+  }
 
   for (const circuit of CIRCUITS) {
-    const success = await initializeCircuit(program, owner, provider, circuit, force);
+    const success = await initializeCircuit(program, owner, provider, circuit, force, offchainSource);
     results.push({ circuit, success });
     
     // Small delay between circuits to avoid rate limiting
