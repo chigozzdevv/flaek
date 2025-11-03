@@ -6,7 +6,8 @@
   },
   "dependencies": {
     "@arcium-hq/client": "0.3.0",
-    "@coral-xyz/anchor": "^0.31.1"
+    "@coral-xyz/anchor": "^0.31.1",
+    "@solana/web3.js": "^1.95.3"
   },
   "devDependencies": {
     "chai": "^4.3.4",

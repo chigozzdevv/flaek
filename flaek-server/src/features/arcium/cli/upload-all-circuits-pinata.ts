@@ -32,8 +32,7 @@ async function main() {
   }
 
   const form = new FormData()
-  // Store files at the root of the pinned directory to avoid nested path issues
-  const dirPrefix = ''
+  const dirPrefix = 'devnet'
   for (const abs of files) {
     const base = path.basename(abs)
     const circuit = base.endsWith('_devnet.arcis')

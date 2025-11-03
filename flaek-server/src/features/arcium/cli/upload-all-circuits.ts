@@ -11,22 +11,27 @@ async function main() {
     process.exit(1)
   }
 
-  const files = fs.readdirSync(buildDir)
-    .filter(f => f.endsWith('_testnet.arcis'))
+  const net = (process.env.CIRCUITS_NET || process.argv.slice(2)[0] || 'devnet').toLowerCase()
+  const all = fs.readdirSync(buildDir)
+  const suffix = `_${net}.arcis`
+  const netFiles = all.filter(f => f.endsWith(suffix)).map(f => path.join(buildDir, f))
+  const baseFiles = all
+    .filter(f => f.endsWith('.arcis') && !f.endsWith('_testnet.arcis') && !f.endsWith('_devnet.arcis'))
     .map(f => path.join(buildDir, f))
+  const files = netFiles.length > 0 ? netFiles : baseFiles
 
   if (files.length === 0) {
-    console.error('No *_testnet.arcis files found in build directory')
+    console.error(`No *${suffix} or base .arcis files found in build directory`)
     process.exit(1)
   }
 
-  const folder = 'arcium/circuits/testnet'
+  const folder = `arcium/circuits/${net}`
   const results: Record<string, { url: string, public_id: string }> = {}
 
   for (const file of files) {
     const base = path.basename(file)
-    const circuit = base.replace('_testnet.arcis', '')
-    const publicId = `${circuit}_testnet.arcis`
+    const circuit = base.endsWith(suffix) ? base.replace(suffix, '') : base.replace('.arcis', '')
+    const publicId = `${circuit}${suffix}`
     const buf = fs.readFileSync(file)
     process.stdout.write(`Uploading ${base} -> ${folder}/${publicId} ... `)
     try {
@@ -41,9 +46,9 @@ async function main() {
     }
   }
 
-  const outPath = path.join(buildDir, 'circuits_urls.json')
+  const outPath = path.join(buildDir, `circuits_urls_${net}.json`)
   fs.writeFileSync(outPath, JSON.stringify(results, null, 2))
-  console.log(`\nUploaded ${Object.keys(results).length} circuits.`)
+  console.log(`\nUploaded ${Object.keys(results).length} circuits for ${net}.`)
   console.log(`Mapping saved to: ${outPath}`)
   console.log('Sample:')
   console.log(JSON.stringify(Object.entries(results).slice(0,3), null, 2))

@@ -190,7 +190,7 @@ export default function PipelineBuilderPage() {
   function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi')
+  const [mxeProgramId, setMxeProgramId] = useState('EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)

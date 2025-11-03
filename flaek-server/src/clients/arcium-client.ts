@@ -77,11 +77,12 @@ export class ArciumClient {
     return { tx, computationOffset: computationOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
   }
 
-  async submitQueue(input: { mxeProgramId: string; payload: Buffer; compDefOffset: number; circuit: string; accounts?: Record<string, string>; clientPublicKey: Buffer; clientNonce: Buffer }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
+  async submitQueue(input: { mxeProgramId: string; compDefOffset: number; circuit: string; accounts?: Record<string, string>; clientPublicKey: Buffer; clientNonce: Buffer; ciphertexts?: Array<number[] | Uint8Array>; payload?: Buffer }): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
     try {
       console.log('[Arcium Client] submitQueue called with:', {
         mxeProgramId: input.mxeProgramId,
-        payloadLength: input.payload.length,
+        payloadLength: input.payload ? input.payload.length : undefined,
+        ciphertexts: input.ciphertexts ? input.ciphertexts.length : undefined,
         compDefOffset: input.compDefOffset,
         circuit: input.circuit,
         accounts: input.accounts
@@ -126,14 +127,21 @@ export class ArciumClient {
     const pub = new Uint8Array(input.clientPublicKey);
     const nonce = input.clientNonce;
 
-    const bytes = new Uint8Array(input.payload);
-    if (bytes.length < 64) {
-      throw new Error('Client-encrypted payload too short (expected at least 64 bytes for ct0+ct1)');
+    const cts: Uint8Array[] = [];
+    if (input.ciphertexts && Array.isArray(input.ciphertexts)) {
+      for (const item of input.ciphertexts) {
+        const arr = item instanceof Uint8Array ? item : Uint8Array.from(item as number[]);
+        if (arr.length !== 32) throw new Error('Each ciphertext must be 32 bytes');
+        cts.push(arr);
+      }
+    } else if (input.payload) {
+      const bytes = new Uint8Array(input.payload);
+      if (bytes.length % 32 !== 0) throw new Error('Payload length must be a multiple of 32');
+      for (let i = 0; i < bytes.length; i += 32) cts.push(bytes.slice(i, i + 32));
+    } else {
+      throw new Error('Provide ciphertexts[] or payload');
     }
-    
-    const ct0 = bytes.slice(0, bytes.length / 2);
-    const ct1 = bytes.slice(bytes.length / 2);
-    console.log('[Arcium Client] Client-encrypted ct0/ct1 extracted');
+    console.log('[Arcium Client] Ciphertexts:', cts.length);
 
     const compOffset = new (anchor as any).BN(crypto.randomBytes(8).toString('hex'), 16);
     const compAcc = getComputationAccAddress(mxeProgramId, compOffset);
@@ -173,8 +181,7 @@ export class ArciumClient {
     console.log('[Arcium Client] Accounts:', accounts);
     console.log('[Arcium Client] Preparing method call with:');
     console.log('  - compOffset:', compOffset.toString());
-    console.log('  - ct0 type:', typeof ct0, 'length:', ct0?.length);
-    console.log('  - ct1 type:', typeof ct1, 'length:', ct1?.length);
+    console.log('  - ciphertext count:', cts.length);
     console.log('  - pub length:', pub.length);
 
     try {
@@ -182,17 +189,17 @@ export class ArciumClient {
       const { blockhash } = await provider.connection.getLatestBlockhash('confirmed');
       console.log('[Arcium Client] Latest blockhash:', blockhash);
 
+      const ciphertextArgs = cts.map((ct) => Array.from(ct));
       const tx = await method(
         compOffset,
-        Array.from(ct0 as unknown as Uint8Array),
-        Array.from(ct1 as unknown as Uint8Array),
+        ...ciphertextArgs,
         Array.from(pub),
         new (anchor as any).BN(deserializeLE(nonce).toString())
       )
         .accountsPartial(accounts)
         .preInstructions([
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 400_000 }),
-          ComputeBudgetProgram.requestHeapFrame({ bytes: 256 * 1024 }),
+          ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
         ])
         .rpc({
           skipPreflight: false,

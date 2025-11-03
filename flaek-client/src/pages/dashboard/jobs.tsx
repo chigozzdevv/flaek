@@ -133,7 +133,7 @@ export default function JobsPage() {
       const privKeyBytes = new Uint8Array(encryptionKey.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)))
 
       const connection = new Connection('https://api.devnet.solana.com')
-      const mxeProgramId = new PublicKey(selectedJob.attestation?.mxe_program_id || '6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi')
+      const mxeProgramId = new PublicKey(selectedJob.attestation?.mxe_program_id || 'EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ')
       const mxePublicKey = await getMXEPublicKey({ connection } as any, mxeProgramId)
       
       if (!mxePublicKey) {

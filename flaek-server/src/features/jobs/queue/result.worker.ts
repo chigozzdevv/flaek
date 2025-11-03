@@ -101,43 +101,35 @@ export function startResultWorker() {
 
         console.log(`[Result Worker] Returning encrypted result for job ${jobId} (confidential computing)`);
 
-        let ct0: any = null;
-        let ct1: any = null;
-
+        const ciphertexts: number[][] = [];
         if (output?.ct0 && output?.ct1) {
-          ct0 = Array.from(new Uint8Array(output.ct0));
-          ct1 = Array.from(new Uint8Array(output.ct1));
-        } else if (Array.isArray(output?.parts) && output.parts.length >= 2) {
-          ct0 = Array.from(new Uint8Array(output.parts[0]));
-          ct1 = Array.from(new Uint8Array(output.parts[1]));
+          ciphertexts.push(Array.from(new Uint8Array(output.ct0)));
+          ciphertexts.push(Array.from(new Uint8Array(output.ct1)));
+        } else if (Array.isArray(output?.parts) && output.parts.length > 0) {
+          for (const p of output.parts) ciphertexts.push(Array.from(new Uint8Array(p)));
         } else if (output?.encrypted && Array.isArray(output.encrypted)) {
           const flat = new Uint8Array(output.encrypted.flat());
-          if (flat.length >= 32) {
-            ct0 = Array.from(flat.slice(0, 16));
-            ct1 = Array.from(flat.slice(16, 32));
-          }
+          for (let i = 0; i + 32 <= flat.length; i += 32) ciphertexts.push(Array.from(flat.slice(i, i + 32)));
         } else if (output?.encryptedU8 && Array.isArray(output.encryptedU8)) {
           const flat = new Uint8Array(output.encryptedU8.flat());
-          if (flat.length >= 32) {
-            ct0 = Array.from(flat.slice(0, 16));
-            ct1 = Array.from(flat.slice(16, 32));
-          }
+          for (let i = 0; i + 32 <= flat.length; i += 32) ciphertexts.push(Array.from(flat.slice(i, i + 32)));
         } else if (Array.isArray(output)) {
           const flat = new Uint8Array(output.flat());
-          if (flat.length >= 32) {
-            ct0 = Array.from(flat.slice(0, 16));
-            ct1 = Array.from(flat.slice(16, 32));
-          }
+          for (let i = 0; i + 32 <= flat.length; i += 32) ciphertexts.push(Array.from(flat.slice(i, i + 32)));
         }
 
-        if (ct0 && ct1) {
-          result = {
+        if (ciphertexts.length > 0) {
+          const base: any = {
             encrypted: true,
-            ct0,
-            ct1,
+            ciphertexts,
             nonce: job.enc?.nonceB64 || null,
             client_public_key_b64: job.enc?.clientPubKeyB64 || null,
           };
+          if (ciphertexts.length === 2) {
+            base.ct0 = ciphertexts[0];
+            base.ct1 = ciphertexts[1];
+          }
+          result = base;
         } else {
           result = { error: 'Could not extract encrypted output from computation', encrypted: false };
         }

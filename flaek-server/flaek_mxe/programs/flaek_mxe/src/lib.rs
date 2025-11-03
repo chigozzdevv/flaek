@@ -1,6 +1,65 @@
+// Increase heap size to 256KB for Arcium computations
+#[cfg(all(not(feature = "no-entrypoint"), not(test)))]
+#[global_allocator]
+static ALLOC: BumpAllocator = BumpAllocator {
+    start: solana_program::entrypoint::HEAP_START_ADDRESS as usize,
+    len: 256 * 1024, // 256KB heap
+};
+
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
-use arcium_client::idl::arcium::types::{CircuitSource, OffChainCircuitSource};
+use arcium_anchor::traits::InitCompDefAccs;
+use arcium_client::idl::arcium::cpi::accounts::InitComputationDefinition;
+use arcium_client::idl::arcium::cpi::init_computation_definition;
+use arcium_client::idl::arcium::types::{
+    CircuitSource,
+    ComputationDefinitionMeta,
+    ComputationSignature,
+    OffChainCircuitSource,
+};
+
+fn init_offchain_comp_def<'info, T>(
+    accounts: &mut T,
+    finalize_during_callback: bool,
+    cu_amount: u64,
+    circuit_source_override: Option<CircuitSource>,
+    finalize_authority: Option<Pubkey>,
+) -> Result<()>
+where
+    T: InitCompDefAccs<'info>,
+{
+    let cpi_context = CpiContext::new(
+        accounts.arcium_program(),
+        InitComputationDefinition {
+            signer: accounts.signer(),
+            system_program: accounts.system_program(),
+            mxe: accounts.mxe_acc(),
+            comp_def_acc: accounts.comp_def_acc(),
+        },
+    );
+
+    let signature = ComputationSignature {
+        parameters: accounts.params(),
+        outputs: accounts.outputs(),
+    };
+    let meta = ComputationDefinitionMeta {
+        circuit_len: 0,
+        signature,
+    };
+
+    init_computation_definition(
+        cpi_context,
+        accounts.comp_def_offset(),
+        accounts.mxe_program(),
+        meta,
+        circuit_source_override,
+        cu_amount,
+        finalize_authority,
+        finalize_during_callback,
+    )?;
+
+    Ok(())
+}
 
 // Circuit offsets
 const COMP_DEF_OFFSET_ADD: u32 = comp_def_offset("add");
@@ -32,14 +91,14 @@ const COMP_DEF_OFFSET_VOTE_TALLY: u32 = comp_def_offset("vote_tally");
 const COMP_DEF_OFFSET_MEETS_THRESHOLD: u32 = comp_def_offset("meets_threshold");
 const COMP_DEF_OFFSET_WEIGHTED_AVERAGE: u32 = comp_def_offset("weighted_average");
 
-declare_id!("6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi");
+declare_id!("EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ");
 
 #[arcium_program]
 pub mod flaek_mxe {
     use super::*;
 
     pub fn init_add_comp_def(ctx: Context<InitAddCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -97,7 +156,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_subtract_comp_def(ctx: Context<InitSubtractCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -155,7 +214,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_multiply_comp_def(ctx: Context<InitMultiplyCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -213,7 +272,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_divide_comp_def(ctx: Context<InitDivideCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -271,7 +330,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_modulo_comp_def(ctx: Context<InitModuloCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -329,7 +388,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_abs_diff_comp_def(ctx: Context<InitAbsDiffCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -387,7 +446,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_power_comp_def(ctx: Context<InitPowerCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -445,7 +504,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_greater_than_comp_def(ctx: Context<InitGreaterThanCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -503,7 +562,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_less_than_comp_def(ctx: Context<InitLessThanCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -561,7 +620,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_equal_comp_def(ctx: Context<InitEqualCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -619,7 +678,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_greater_equal_comp_def(ctx: Context<InitGreaterEqualCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -677,7 +736,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_less_equal_comp_def(ctx: Context<InitLessEqualCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -735,7 +794,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_meets_threshold_comp_def(ctx: Context<InitMeetsThresholdCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -793,7 +852,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_in_range_comp_def(ctx: Context<InitInRangeCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -853,7 +912,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_and_comp_def(ctx: Context<InitAndCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -911,7 +970,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_or_comp_def(ctx: Context<InitOrCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -969,7 +1028,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_xor_comp_def(ctx: Context<InitXorCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1027,7 +1086,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_not_comp_def(ctx: Context<InitNotCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1083,7 +1142,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_if_else_comp_def(ctx: Context<InitIfElseCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1143,7 +1202,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_vote_tally_comp_def(ctx: Context<InitVoteTallyCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1199,7 +1258,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_average_comp_def(ctx: Context<InitAverageCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1257,7 +1316,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_sum_comp_def(ctx: Context<InitSumCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1315,7 +1374,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_min_comp_def(ctx: Context<InitMinCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1373,7 +1432,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_max_comp_def(ctx: Context<InitMaxCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1431,7 +1490,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_median_comp_def(ctx: Context<InitMedianCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1489,7 +1548,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_weighted_average_comp_def(ctx: Context<InitWeightedAverageCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1547,7 +1606,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_credit_score_comp_def(ctx: Context<InitCreditScoreCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,
@@ -1610,7 +1669,7 @@ pub mod flaek_mxe {
     }
 
     pub fn init_health_risk_comp_def(ctx: Context<InitHealthRiskCompDef>) -> Result<()> {
-        init_comp_def(
+        init_offchain_comp_def(
             ctx.accounts,
             true,
             0,

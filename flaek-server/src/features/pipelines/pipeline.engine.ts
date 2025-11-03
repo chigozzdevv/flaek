@@ -177,17 +177,21 @@ export class PipelineEngine {
       }
 
       console.log(`[Pipeline Executor] Using client-encrypted data`);
-      const ct0 = Buffer.from(clientEncryptedData.ct0);
-      const ct1 = Buffer.from(clientEncryptedData.ct1);
-      const payload = Buffer.concat([ct0, ct1]);
-      console.log(`[Pipeline Executor] Client-encrypted payload (${payload.length} bytes)`);
+      let ciphertexts: Array<number[] | Uint8Array> | undefined = undefined;
+      if (Array.isArray(clientEncryptedData.ciphertexts)) {
+        ciphertexts = clientEncryptedData.ciphertexts;
+      } else if (clientEncryptedData.ct0 && clientEncryptedData.ct1) {
+        ciphertexts = [clientEncryptedData.ct0, clientEncryptedData.ct1];
+      } else {
+        throw new Error('ciphertexts missing');
+      }
 
       const txInfo = await this.arciumClient.submitQueue({
         mxeProgramId: this.mxeProgramId.toBase58(),
         compDefOffset,
         circuit,
         accounts: options?.cluster ? { cluster: options.cluster } : {},
-        payload,
+        ciphertexts,
         clientPublicKey: Buffer.from(clientEncryptedData.client_public_key),
         clientNonce: typeof clientEncryptedData.nonce === 'string'
           ? Buffer.from(clientEncryptedData.nonce, 'base64')

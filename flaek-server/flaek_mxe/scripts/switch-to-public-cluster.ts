@@ -178,20 +178,7 @@ async function initAndFinalizeCircuits(
       }
     }
 
-    try {
-      const finalizeTx: any = await buildFinalizeCompDefTx(provider as any, compDefOffset, programId);
-      const latest = await provider.connection.getLatestBlockhash('processed');
-      if (finalizeTx.message && typeof finalizeTx.message.recentBlockhash === 'string') {
-        finalizeTx.message.recentBlockhash = latest.blockhash;
-      } else {
-        finalizeTx.recentBlockhash = latest.blockhash;
-      }
-      finalizeTx.sign(wallet);
-      const sig = await provider.sendAndConfirm(finalizeTx, [], { commitment: 'processed' });
-      console.log('  finalize tx:', sig);
-    } catch (e: any) {
-      console.log('  finalize failed:', e?.message || e);
-    }
+    console.log('  finalize skipped (off-chain circuit sources not supported by finalize yet)');
   }
 }
 
@@ -281,7 +268,7 @@ async function main() {
     console.log('Derived program id from keypair:', programId.toBase58());
   }
   if (!programId) {
-  const programIdStr = args.programId || idl.address || idl?.metadata?.address || '6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi';
+  const programIdStr = args.programId || idl.address || idl?.metadata?.address || 'EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ';
     programId = new PublicKey(programIdStr);
   }
 

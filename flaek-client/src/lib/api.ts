@@ -344,7 +344,7 @@ export async function apiTestPipeline(input: { pipeline: any; inputs: any; mxePr
   const body = {
     pipeline: input.pipeline,
     inputs: input.inputs,
-    mxeProgramId: input.mxeProgramId || '6fm76JYZwMX5gZauh3LE86D7XQTZrAoqFdhBVnBnukTi',
+    mxeProgramId: input.mxeProgramId || 'EdNxpkFCVuSzwP5FmPxbSm4k9kvdyQ7dgRN9u4m7mRYJ',
     dryRun: true,
   }
   const res = await request('/v1/pipelines/execute', { method: 'POST', body: JSON.stringify(body) }) as {
