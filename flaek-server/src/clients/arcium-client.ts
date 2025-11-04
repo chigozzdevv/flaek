@@ -3,6 +3,8 @@ import { Connection, Keypair, PublicKey, ComputeBudgetProgram, SystemProgram } f
 import { x25519, RescueCipher, getMXEPublicKey, deserializeLE, getArciumProgram, getArciumProgramId, getComputationAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getCompDefAccAddress, getStakingPoolAccAddress, getClockAccAddress, getMXEAccAddress } from '@arcium-hq/client';
 import crypto from 'crypto';
 
+const DEFAULT_HEAP_FRAME_BYTES = 262_144;
+
 export type ArciumJobRequest = {
   programId: string;
   mxeProgramId: string;
@@ -30,7 +32,6 @@ export class ArciumClient {
   async submit(req: ArciumJobRequest): Promise<{ tx: string; computationOffset: string; nonceB64: string; clientPubKeyB64: string }> {
     const programId = new PublicKey(req.programId);
     const mxeProgramId = new PublicKey(req.mxeProgramId);
-    // Anchor >=0.28 expects the program address inside the IDL and a provider as the 2nd arg
     const opIdl = { ...(req.idl as any), address: programId.toBase58() };
     const program = new (anchor as any).Program(opIdl, this.provider);
 
@@ -251,8 +252,14 @@ export class ArciumClient {
       console.log('[Arcium Client] Latest blockhash:', blockhash);
 
       const ciphertextArgs = cts.map((ct) => Array.from(ct));
-      console.log('[Arcium Client] Skipping custom heap frame request (using default)');
-      const heapIx = undefined;
+      const heapBytesRaw = process.env.ARCIUM_HEAP_FRAME_BYTES;
+      const heapBytes = heapBytesRaw ? parseInt(heapBytesRaw, 10) : DEFAULT_HEAP_FRAME_BYTES;
+      const heapInstruction = Number.isFinite(heapBytes) && heapBytes > 0 ? ComputeBudgetProgram.requestHeapFrame({ bytes: heapBytes }) : undefined;
+      if (heapInstruction) {
+        console.log('[Arcium Client] Requesting heap frame bytes:', heapBytes);
+      } else {
+        console.warn('[Arcium Client] Heap frame request skipped: invalid ARCIUM_HEAP_FRAME_BYTES value');
+      }
       const tx = await method(
         compOffset,
         ...ciphertextArgs,
@@ -262,6 +269,7 @@ export class ArciumClient {
         .accountsPartial(accounts)
         .preInstructions(
           [
+            heapInstruction,
             ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
             ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
           ].filter(Boolean)
@@ -286,6 +294,7 @@ export class ArciumClient {
             .accountsPartial(accounts)
             .preInstructions(
               [
+                heapInstruction,
                 ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
                 ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
               ].filter(Boolean)
