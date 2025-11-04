@@ -4,8 +4,7 @@ import * as path from 'path'
 import { objectStore } from '@/storage/object-store'
 
 async function main() {
-  const root = process.cwd()
-  const buildDir = path.join(root, 'flaek_mxe', 'build')
+  const buildDir = path.resolve(process.cwd(), '..', 'flaek_mxe', 'build')
   if (!fs.existsSync(buildDir)) {
     console.error(`Build directory not found: ${buildDir}`)
     process.exit(1)

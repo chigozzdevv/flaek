@@ -9,7 +9,7 @@ const CIRCUITS = [
   'credit_score','health_risk','vote_tally','meets_threshold','weighted_average'
 ]
 
-const root = path.join(process.cwd(), 'flaek_mxe', 'build')
+const root = path.resolve(process.cwd(), '..', 'flaek_mxe', 'build')
 
 const out: Record<string, { hashHex: string; hashArray: number[] }> = {}
 for (const c of CIRCUITS) {

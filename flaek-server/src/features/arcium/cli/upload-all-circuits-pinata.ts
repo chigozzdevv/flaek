@@ -12,8 +12,7 @@ async function main() {
     process.exit(1)
   }
 
-  const root = process.cwd()
-  const buildDir = path.join(root, 'flaek_mxe', 'build')
+  const buildDir = path.resolve(process.cwd(), '..', 'flaek_mxe', 'build')
   if (!fs.existsSync(buildDir)) {
     console.error(`Build directory not found: ${buildDir}`)
     process.exit(1)

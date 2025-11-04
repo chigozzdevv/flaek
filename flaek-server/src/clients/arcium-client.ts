@@ -91,10 +91,9 @@ export class ArciumClient {
       const mxeProgramId = new PublicKey(input.mxeProgramId);
       const provider = this.provider;
 
-    // Load MXE program IDL - use process.cwd() to get project root
     const path = require('path');
     const fs = require('fs');
-    const idlPath = path.join(process.cwd(), 'flaek_mxe/target/idl/flaek_mxe.json');
+    const idlPath = path.join(process.cwd(), '..', 'flaek_mxe', 'target', 'idl', 'flaek_mxe.json');
     console.log('[Arcium Client] Loading IDL from:', idlPath);
 
     if (!fs.existsSync(idlPath)) {
@@ -114,8 +113,7 @@ export class ArciumClient {
     }
     console.log('[Arcium Client] MXE program created');
 
-    // In client-encrypted mode, we don't need to fetch the MXE public key here.
-    // The client provides its public key and nonce; we pass encrypted limbs through.
+    
     console.log('[Arcium Client] Skipping MXE public key fetch (client-encrypted mode)');
 
     // Confidential computing: client MUST provide encrypted data
