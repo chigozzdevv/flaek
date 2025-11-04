@@ -1,5 +1,5 @@
 import * as anchor from '@coral-xyz/anchor';
-import { Connection, Keypair, PublicKey, ComputeBudgetProgram } from '@solana/web3.js';
+import { Connection, Keypair, PublicKey, ComputeBudgetProgram, SystemProgram } from '@solana/web3.js';
 import { x25519, RescueCipher, getMXEPublicKey, deserializeLE, getArciumProgram, getArciumProgramId, getComputationAccAddress, getMempoolAccAddress, getExecutingPoolAccAddress, getCompDefAccAddress, getStakingPoolAccAddress, getClockAccAddress, getMXEAccAddress } from '@arcium-hq/client';
 import crypto from 'crypto';
 
@@ -170,12 +170,37 @@ export class ArciumClient {
       clock: clock.toBase58(),
     });
 
+    // Pre-initialize the SignerAccount PDA once to avoid runtime allocation during queue_computation
+    try {
+      const signInfo = await provider.connection.getAccountInfo(signPda[0], 'finalized');
+      if (!signInfo) {
+        console.log('[Arcium Client] Pre-initializing SignerAccount PDA...');
+        const txInit = await (mxeProgram.methods as any)
+          .initSignPda()
+          .accounts({
+            payer: (provider.wallet as any)?.publicKey,
+            signPdaAccount: signPda[0],
+            systemProgram: SystemProgram.programId,
+          })
+          .transaction();
+        const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash('finalized');
+        txInit.feePayer = (provider.wallet as any)?.publicKey;
+        txInit.recentBlockhash = blockhash;
+        const signedInit = await (provider.wallet as any).signTransaction(txInit);
+        const initSig = await provider.connection.sendRawTransaction(signedInit.serialize(), { skipPreflight: true });
+        await provider.connection.confirmTransaction({ signature: initSig, blockhash, lastValidBlockHeight }, 'finalized');
+        console.log('[Arcium Client] SignerAccount PDA initialized with tx:', initSig);
+      }
+    } catch (preInitErr: any) {
+      console.warn('[Arcium Client] SignerAccount pre-initialization skipped/failed:', preInitErr?.message || preInitErr);
+    }
+
     const method = (mxeProgram.methods as any)[input.circuit];
     if (!method) throw new Error(`Method ${input.circuit} not found in MXE program`);
     
     console.log('[Arcium Client] Calling MXE program method:', input.circuit);
     
-    const accounts = {
+    const baseAccounts: any = {
       payer: (provider.wallet as any)?.publicKey,
       signPdaAccount: signPda[0],
       computationAccount: compAcc,
@@ -186,8 +211,35 @@ export class ArciumClient {
       compDefAccount: compDef,
       clockAccount: clock,
       arciumProgram: getArciumProgramId(),
-      ...input.accounts, // Merge any additional accounts
+      poolAccount: new PublicKey('7MGSS4iKNM4sVib7bDZDJhVqB6EcchPwVnTKenCY1jt3'),
+      systemProgram: SystemProgram.programId,
     };
+
+    const allowList = new Set([
+      'payer',
+      'signPdaAccount',
+      'computationAccount',
+      'clusterAccount',
+      'mxeAccount',
+      'mempoolAccount',
+      'executingPool',
+      'compDefAccount',
+      'clockAccount',
+      'arciumProgram',
+      'poolAccount',
+      'systemProgram',
+    ]);
+
+    const mappedOverrides: Record<string, any> = {};
+    if (input.accounts) {
+      for (const [k, v] of Object.entries(input.accounts)) {
+        const key = k === 'cluster' ? 'clusterAccount' : k;
+        if (!allowList.has(key)) continue;
+        mappedOverrides[key] = typeof v === 'string' ? new PublicKey(v) : v;
+      }
+    }
+
+    const accounts = { ...baseAccounts, ...mappedOverrides };
 
     console.log('[Arcium Client] Accounts:', accounts);
     console.log('[Arcium Client] Preparing method call with:');
@@ -197,12 +249,12 @@ export class ArciumClient {
 
     try {
       console.log('[Arcium Client] Fetching latest blockhash...');
-      const { blockhash } = await provider.connection.getLatestBlockhash('confirmed');
+      const { blockhash, lastValidBlockHeight } = await provider.connection.getLatestBlockhash('finalized');
       console.log('[Arcium Client] Latest blockhash:', blockhash);
 
       const ciphertextArgs = cts.map((ct) => Array.from(ct));
-      const requestedHeapBytes = 256 * 1024;
-      console.log('[Arcium Client] Requesting heap frame (bytes):', requestedHeapBytes);
+      console.log('[Arcium Client] Skipping custom heap frame request (using default)');
+      const heapIx = undefined;
       const tx = await method(
         compOffset,
         ...ciphertextArgs,
@@ -210,17 +262,49 @@ export class ArciumClient {
         new (anchor as any).BN(deserializeLE(nonce).toString())
       )
         .accountsPartial(accounts)
-        .preInstructions([
-          ComputeBudgetProgram.requestHeapFrame({ bytes: requestedHeapBytes }),
-          ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
-          ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
-        ])
-        .rpc({
-          skipPreflight: false,
-          commitment: 'confirmed'
-        });
+        .preInstructions(
+          [
+            ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+            ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
+          ].filter(Boolean)
+        )
+        .transaction();
 
-      return { tx, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
+      tx.feePayer = (provider.wallet as any)?.publicKey;
+      tx.recentBlockhash = blockhash;
+      let signedTx = await (provider.wallet as any).signTransaction(tx);
+      try {
+        const sig = await provider.connection.sendRawTransaction(signedTx.serialize(), { skipPreflight: true });
+        await provider.connection.confirmTransaction({ signature: sig, blockhash, lastValidBlockHeight }, 'finalized');
+        return { tx: sig, computationOffset: compOffset.toString(), nonceB64: Buffer.from(nonce).toString('base64'), clientPubKeyB64: Buffer.from(pub).toString('base64') };
+      } catch (sendErr: any) {
+        try {
+          const sim = await (mxeProgram.methods as any)[input.circuit](
+            compOffset,
+            ...ciphertextArgs,
+            Array.from(pub),
+            new (anchor as any).BN(deserializeLE(nonce).toString())
+          )
+            .accountsPartial(accounts)
+            .preInstructions(
+              [
+                ComputeBudgetProgram.setComputeUnitLimit({ units: 1_400_000 }),
+                ComputeBudgetProgram.setComputeUnitPrice({ microLamports: 1 }),
+              ].filter(Boolean)
+            )
+            .simulate();
+          if (sim?.logs) console.error('[Arcium Client] Simulation logs:', sim.logs);
+        } catch (simErr1: any) {
+          try {
+            const sim2 = await provider.connection.simulateTransaction(signedTx ?? tx);
+            if (sim2?.value?.logs) console.error('[Arcium Client] Simulation logs:', sim2.value.logs);
+            if (sim2?.value?.err) console.error('[Arcium Client] Simulation error:', JSON.stringify(sim2.value.err));
+          } catch (simErr2: any) {
+            console.error('[Arcium Client] Simulation failed:', simErr2?.message || simErr2);
+          }
+        }
+        throw sendErr;
+      }
     } catch (error: any) {
       console.error('[Arcium Client] Method call failed:', error?.message || 'No message');
       console.error('[Arcium Client] Error stack:', error?.stack || 'No stack');

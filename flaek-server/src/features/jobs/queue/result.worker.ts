@@ -94,7 +94,7 @@ export function startResultWorker() {
       );
 
       const arciumProgram = getArciumProgram(provider as any);
-      const computationAccount = await getComputationAccInfo(arciumProgram, compAcc, 'confirmed');
+      const computationAccount = await getComputationAccInfo(arciumProgram, compAcc, 'finalized');
 
       if (computationAccount && computationAccount.output) {
         const output = computationAccount.output as any;

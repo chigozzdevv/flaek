@@ -1,5 +1,10 @@
 use anchor_lang::prelude::*;
 use arcium_anchor::prelude::*;
+use arcium_anchor::traits::InitCompDefAccs;
+use arcium_client::idl::arcium::{
+    cpi::{accounts::InitComputationDefinition, init_computation_definition},
+    types::{CircuitSource, ComputationDefinitionMeta, ComputationSignature, OffChainCircuitSource},
+};
 
 // Circuit offsets
 const COMP_DEF_OFFSET_ADD: u32 = comp_def_offset("add");
@@ -31,14 +36,64 @@ const COMP_DEF_OFFSET_VOTE_TALLY: u32 = comp_def_offset("vote_tally");
 const COMP_DEF_OFFSET_MEETS_THRESHOLD: u32 = comp_def_offset("meets_threshold");
 const COMP_DEF_OFFSET_WEIGHTED_AVERAGE: u32 = comp_def_offset("weighted_average");
 
-declare_id!("GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9");
+fn init_comp_def_zero<'info, T>(
+    accs: &T,
+    finalize_during_callback: bool,
+    cu_amount: u64,
+    circuit_source_override: Option<CircuitSource>,
+    finalize_authority: Option<Pubkey>,
+) -> Result<()>
+where
+    T: InitCompDefAccs<'info>,
+{
+    let cpi_context = CpiContext::new(
+        accs.arcium_program(),
+        InitComputationDefinition {
+            signer: accs.signer(),
+            system_program: accs.system_program(),
+            mxe: accs.mxe_acc(),
+            comp_def_acc: accs.comp_def_acc(),
+        },
+    );
+
+    let signature = ComputationSignature {
+        parameters: accs.params(),
+        outputs: accs.outputs(),
+    };
+    let computation_definition = ComputationDefinitionMeta {
+        circuit_len: 0,
+        signature,
+    };
+    init_computation_definition(
+        cpi_context,
+        accs.comp_def_offset(),
+        accs.mxe_program(),
+        computation_definition,
+        circuit_source_override,
+        cu_amount,
+        finalize_authority,
+        finalize_during_callback,
+    )?;
+
+    Ok(())
+}
+
+declare_id!("9VBDqM7RFkrE2Wth8vLAW7CNsxo36hSbjtFHG54D1BKP");
 
 #[arcium_program]
 pub mod flaek_mxe {
     use super::*;
 
+    pub fn init_sign_pda(ctx: Context<InitSignPda>) -> Result<()> {
+        ctx.accounts.sign_pda_account.bump = ctx.bumps.sign_pda_account;
+        Ok(())
+    }
+
     pub fn init_add_comp_def(ctx: Context<InitAddCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/add_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -87,7 +142,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_subtract_comp_def(ctx: Context<InitSubtractCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/subtract_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -136,7 +194,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_multiply_comp_def(ctx: Context<InitMultiplyCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/multiply_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -185,7 +246,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_divide_comp_def(ctx: Context<InitDivideCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/divide_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -234,7 +298,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_modulo_comp_def(ctx: Context<InitModuloCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/modulo_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -283,7 +350,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_abs_diff_comp_def(ctx: Context<InitAbsDiffCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/abs_diff_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -332,7 +402,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_power_comp_def(ctx: Context<InitPowerCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/power_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -381,7 +454,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_greater_than_comp_def(ctx: Context<InitGreaterThanCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/greater_than_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -430,7 +506,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_less_than_comp_def(ctx: Context<InitLessThanCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/less_than_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -479,7 +558,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_equal_comp_def(ctx: Context<InitEqualCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/equal_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -528,7 +610,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_greater_equal_comp_def(ctx: Context<InitGreaterEqualCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/greater_equal_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -577,7 +662,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_less_equal_comp_def(ctx: Context<InitLessEqualCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/less_equal_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -626,7 +714,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_meets_threshold_comp_def(ctx: Context<InitMeetsThresholdCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/meets_threshold_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -675,7 +766,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_in_range_comp_def(ctx: Context<InitInRangeCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/in_range_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -726,7 +820,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_and_comp_def(ctx: Context<InitAndCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/and_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -775,7 +872,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_or_comp_def(ctx: Context<InitOrCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/or_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -824,7 +924,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_xor_comp_def(ctx: Context<InitXorCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/xor_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -873,7 +976,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_not_comp_def(ctx: Context<InitNotCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/not_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -920,7 +1026,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_if_else_comp_def(ctx: Context<InitIfElseCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/if_else_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -971,7 +1080,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_vote_tally_comp_def(ctx: Context<InitVoteTallyCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/vote_tally_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1018,7 +1130,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_average_comp_def(ctx: Context<InitAverageCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/average_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1067,7 +1182,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_sum_comp_def(ctx: Context<InitSumCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/sum_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1116,7 +1234,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_min_comp_def(ctx: Context<InitMinCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/min_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1165,7 +1286,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_max_comp_def(ctx: Context<InitMaxCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/max_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1214,7 +1338,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_median_comp_def(ctx: Context<InitMedianCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/median_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1263,7 +1390,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_weighted_average_comp_def(ctx: Context<InitWeightedAverageCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/weighted_average_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1312,7 +1442,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_credit_score_comp_def(ctx: Context<InitCreditScoreCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/credit_score_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1366,7 +1499,10 @@ pub mod flaek_mxe {
     }
 
     pub fn init_health_risk_comp_def(ctx: Context<InitHealthRiskCompDef>) -> Result<()> {
-        init_comp_def(ctx.accounts, true, 0, None, None)?;
+        init_comp_def_zero(ctx.accounts, true, 0, Some(CircuitSource::OffChain(OffChainCircuitSource {
+            source: "https://brown-immense-amphibian-214.mypinata.cloud/ipfs/bafybeibt3652jfgchqftay6cfytbiibxqujxqm3vmvy4d2kgfzubboo3qq/devnet/health_risk_devnet.arcis".to_string(),
+            hash: [0; 32],
+        })), None)?;
         Ok(())
     }
 
@@ -1420,6 +1556,23 @@ pub mod flaek_mxe {
         });
         Ok(())
     }
+}
+
+
+#[derive(Accounts)]
+pub struct InitSignPda<'info> {
+    #[account(mut)]
+    pub payer: Signer<'info>,
+    #[account(
+        init_if_needed,
+        space = 9,
+        payer = payer,
+        seeds = [&SIGN_PDA_SEED],
+        bump,
+        address = derive_sign_pda!(),
+    )]
+    pub sign_pda_account: Account<'info, SignerAccount>,
+    pub system_program: Program<'info, System>,
 }
 
 

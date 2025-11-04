@@ -4,12 +4,14 @@ import { PublicKey } from "@solana/web3.js";
 import { FlaekMxe } from "../target/types/flaek_mxe";
 import * as fs from "fs";
 import * as os from "os";
+import * as path from "path";
 import {
   getCompDefAccOffset,
   getArciumAccountBaseSeed,
   getArciumProgAddress,
   buildFinalizeCompDefTx,
   getMXEAccAddress,
+  uploadCircuit,
 } from "@arcium-hq/client";
 
 const CIRCUITS = [
@@ -19,6 +21,18 @@ const CIRCUITS = [
   "average", "sum", "min", "max", "median",
   "credit_score", "health_risk", "vote_tally", "meets_threshold", "weighted_average"
 ];
+
+const CIRCUIT_NET = (process.env.CIRCUITS_NET || "devnet").toLowerCase();
+const BUILD_DIR = path.join(__dirname, "..", "build");
+
+function resolveCircuitArtifact(circuitName: string): string {
+  const netSuffix = `_${CIRCUIT_NET}.arcis`;
+  const candidateWithNet = path.join(BUILD_DIR, `${circuitName}${netSuffix}`);
+  if (fs.existsSync(candidateWithNet)) return candidateWithNet;
+  const baseCandidate = path.join(BUILD_DIR, `${circuitName}.arcis`);
+  if (fs.existsSync(baseCandidate)) return baseCandidate;
+  throw new Error(`Circuit artifact not found for ${circuitName}. Looked for ${path.basename(candidateWithNet)} and ${path.basename(baseCandidate)} in ${BUILD_DIR}`);
+}
 
 async function initializeCircuit(
   program: Program<FlaekMxe>,
@@ -86,6 +100,23 @@ async function initializeCircuit(
       console.log(`  ✓ Registered off-chain circuit source (no on-chain upload needed)`);
       console.log(`  ✅ ${circuitName} initialized for off-chain execution!`);
       return true;
+    }
+
+    try {
+      const artifactPath = resolveCircuitArtifact(circuitName);
+      const artifactBytes = fs.readFileSync(artifactPath);
+      console.log(`  Uploading circuit artifact: ${path.basename(artifactPath)} (${artifactBytes.length} bytes)`);
+      const sigs = await uploadCircuit(
+        provider as any,
+        circuitName,
+        program.programId,
+        new Uint8Array(artifactBytes),
+        false
+      );
+      console.log(`  ✓ Uploaded circuit data (${sigs.length} txs)`);
+    } catch (uploadErr: any) {
+      console.error(`  ❌ Failed to upload circuit data for ${circuitName}:`, uploadErr?.message || uploadErr);
+      return false;
     }
 
     // Wait a bit for the transaction to settle

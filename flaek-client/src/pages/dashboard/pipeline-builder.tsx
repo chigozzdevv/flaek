@@ -190,7 +190,7 @@ export default function PipelineBuilderPage() {
   function PublishPipelineModal({ open, onClose, pipeline, selectedDataset }: { open: boolean; onClose: () => void; pipeline: any; selectedDataset: string }) {
   const [name, setName] = useState('')
   const [version, setVersion] = useState('1.0.0')
-  const [mxeProgramId, setMxeProgramId] = useState('GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9')
+  const [mxeProgramId, setMxeProgramId] = useState('9VBDqM7RFkrE2Wth8vLAW7CNsxo36hSbjtFHG54D1BKP')
   const [publishing, setPublishing] = useState(false)
   const [error, setError] = useState('')
   const [publishedOp, setPublishedOp] = useState<any>(null)
@@ -833,11 +833,11 @@ export default function PipelineBuilderPage() {
                   <select
                     value={selectedDataset}
                     onChange={(e) => handleDatasetChange(e.target.value)}
-                    className="flex-1 px-3 py-2 bg-bg-surface border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500/50"
+                    className="flex-1 px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-xs text-white focus:outline-none focus:border-brand-500/50"
                   >
-                    <option value="" className="bg-bg-surface">Select dataset...</option>
+                    <option value="" className="bg-bg-elev">Select dataset...</option>
                     {datasets.map((ds) => (
-                      <option key={ds.dataset_id} value={ds.dataset_id} className="bg-bg-surface">
+                      <option key={ds.dataset_id} value={ds.dataset_id} className="bg-bg-elev">
                         {ds.name} ({ds.field_count} fields)
                       </option>
                     ))}
@@ -1103,7 +1103,7 @@ const privKeyBytes = Buffer.from(privateKey, 'hex');
 const publicKey = x25519.getPublicKey(privKeyBytes);
 
 const connection = new Connection('https://api.devnet.solana.com');
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9'}');
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || '9VBDqM7RFkrE2Wth8vLAW7CNsxo36hSbjtFHG54D1BKP'}');
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId);
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey);
 const cipher = new RescueCipher(sharedSecret);
@@ -1185,7 +1185,7 @@ const privKeyBytes = hexToBytes(privateKey)
 const publicKey = x25519.getPublicKey(privKeyBytes)
 
 const connection = new Connection('https://api.devnet.solana.com')
-const mxeProgramId = new PublicKey('${operation.mxe_program_id || 'GQdBArjknHVD3r4QesRZsmV1vwQfHyMW7Ue8Shtsaqf9'}')
+const mxeProgramId = new PublicKey('${operation.mxe_program_id || '9VBDqM7RFkrE2Wth8vLAW7CNsxo36hSbjtFHG54D1BKP'}')
 const mxePublicKey = await getMXEPublicKey({ connection }, mxeProgramId)
 const sharedSecret = x25519.getSharedSecret(privKeyBytes, mxePublicKey)
 const cipher = new RescueCipher(sharedSecret)
